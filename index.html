@@ -1,0 +1,2241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>FruityChat</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  :root {
+    --body-bg:#008080; --face:#c0c0c0; --face-dark:#808080; --face-light:#fff;
+    --text:#000; --titlebar-grad:linear-gradient(90deg,#000080,#1084d0); --titlebar-text:#fff;
+    --accent:#316ac5; --input-bg:#fff; --font:Tahoma,'MS Sans Serif',sans-serif;
+    --own-msg-bg:#e8eeff; --mention-color:#000080; --radius:0px;
+  }
+  body[data-theme="xp"] {
+    --body-bg:#3a6ea5; --face:#ece9d8; --face-dark:#8f8f77; --face-light:#fff;
+    --titlebar-grad:linear-gradient(90deg,#0058e6,#3a93ff 50%,#0058e6); --accent:#2a66c9;
+    --own-msg-bg:#d8e8ff; --radius:6px; --font:Tahoma,Verdana,sans-serif;
+  }
+  body[data-theme="win10"] {
+    --body-bg:#f2f2f2; --face:#ffffff; --face-dark:#cfcfcf; --face-light:#e8e8e8;
+    --titlebar-grad:#1f1f1f; --titlebar-text:#fff; --accent:#0067c0; --text:#1a1a1a;
+    --own-msg-bg:#e5f1fb; --font:'Segoe UI',Tahoma,sans-serif; --radius:3px;
+  }
+  body[data-theme="arcade"] {
+    --body-bg:#0a0014; --face:#160026; --face-dark:#ff00de; --face-light:#00fff2;
+    --titlebar-grad:linear-gradient(90deg,#ff00de,#00fff2); --titlebar-text:#0a0014;
+    --accent:#ff00de; --text:#00fff2; --input-bg:#20063a; --own-msg-bg:#2a0a44;
+    --font:'Courier New',monospace; --mention-color:#ff00de; --radius:0px;
+  }
+  body {
+    margin:0; font-family:var(--font); font-size:12px; color:var(--text);
+    background:var(--body-bg); height:100vh; display:flex; align-items:center; justify-content:center;
+  }
+  .win { background:var(--face); border:2px solid; border-color:var(--face-light) var(--face-dark) var(--face-dark) var(--face-light); box-shadow:1px 1px 0 #000; border-radius:var(--radius); }
+  body[data-theme="arcade"] .win { box-shadow:0 0 10px #ff00de,0 0 18px #00fff2 inset; }
+  body[data-theme="win10"] .win { box-shadow:0 2px 14px rgba(0,0,0,.25); }
+  .titlebar { background:var(--titlebar-grad); color:var(--titlebar-text); font-weight:bold; padding:3px 6px; display:flex; justify-content:space-between; align-items:center; border-radius:var(--radius) var(--radius) 0 0; }
+  .titlebar .btns { display:flex; gap:4px; position:relative; align-items:center; }
+  .titlebar span.x, .titlebar button.tb {
+    background:var(--face); color:var(--text); border:1px solid; border-color:var(--face-light) var(--face-dark) var(--face-dark) var(--face-light);
+    padding:0 5px; cursor:pointer; font-size:11px; position:relative;
+  }
+  .titlebar .statsTag { color:var(--titlebar-text); font-size:11px; font-weight:normal; margin-right:2px; }
+  button, input, textarea, select { font-family:var(--font); font-size:12px; background:var(--face); color:var(--text); border:2px solid; border-color:var(--face-light) var(--face-dark) var(--face-dark) var(--face-light); border-radius:var(--radius); }
+  button:active { border-color:var(--face-dark) var(--face-light) var(--face-light) var(--face-dark); }
+  button:disabled { color:#888; cursor:default; }
+  input, textarea, select { border-color:var(--face-dark) var(--face-light) var(--face-light) var(--face-dark); background:var(--input-bg); padding:3px; }
+  .err { color:#d33; font-size:11px; min-height:14px; margin-top:2px; }
+
+  #profileForm { width:340px; display:flex; }
+  #profileForm .body { padding:12px; max-height:78vh; overflow-y:auto; }
+  #profileForm label { display:block; margin-top:8px; font-weight:bold; }
+  #profileForm input[type=text], #profileForm textarea, #profileForm select { width:100%; margin-top:2px; }
+  #profileForm textarea { height:40px; resize:none; }
+  #profileForm .row { margin-top:8px; }
+  .divider { border-top:1px solid var(--face-dark); margin-top:12px; padding-top:8px; }
+  #ssBody label { display:block; font-weight:bold; margin-top:4px; }
+  #ssBody input[type=text] { width:60%; margin-right:4px; }
+  #ssBody .divider:first-child { border-top:none; margin-top:8px; padding-top:0; }
+  #ssBody #ssChannelList div, #ssBody #ssRoleList div { display:flex; justify-content:space-between; align-items:center; padding:2px 0; }
+  #profileForm .actions { margin-top:12px; display:flex; gap:6px; }
+  #profileForm .actions button { flex:1; padding:5px; font-weight:bold; }
+
+  .cropFrame { position:relative; overflow:hidden; background:#000; margin-top:4px; border:1px solid var(--face-dark); cursor:grab; touch-action:none; }
+  .cropFrame:active { cursor:grabbing; }
+  .cropFrame img { position:absolute; user-select:none; -webkit-user-drag:none; pointer-events:none; }
+  .zoomRow { display:flex; align-items:center; gap:6px; margin-top:4px; }
+  .zoomRow input[type=range] { flex:1; }
+  #formOverlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); align-items:center; justify-content:center; z-index:20; }
+
+  #chat { width:760px; height:500px; display:none; flex-direction:column; }
+  #chat .body { flex:1; display:flex; overflow:hidden; }
+  #sidebar { width:180px; border-right:2px solid var(--face-dark); overflow-y:auto; background:var(--input-bg); display:flex; flex-direction:column; }
+  #userSearch { width:100%; border-radius:0; margin:0; }
+  .sechdr { background:var(--titlebar-grad); color:var(--titlebar-text); padding:2px 5px; font-weight:bold; }
+  .navitem { padding:4px 6px; cursor:pointer; display:flex; align-items:center; gap:5px; justify-content:space-between; }
+  .navitem:hover { background:var(--accent); color:#fff; }
+  .navitem.active { background:var(--accent); color:#fff; }
+  .navitem .left { display:flex; align-items:center; gap:5px; overflow:hidden; }
+  .navitem img { width:16px; height:16px; border-radius:2px; flex-shrink:0; }
+  .navitem .badge { background:#c00; color:#fff; border-radius:8px; font-size:10px; padding:0 5px; }
+  .navitem .lvl { font-size:9px; color:#888; }
+  .statusDot { width:8px; height:8px; border-radius:50%; display:inline-block; flex-shrink:0; }
+  .statusDot.online { background:#2ecc40; }
+  .statusDot.away { background:#e6c229; }
+  .statusDot.dnd { background:#e63946; }
+  .statusDot.offline { background:#999; }
+  #main { flex:1; display:flex; overflow:hidden; }
+  #mainCenter { flex:1; display:flex; flex-direction:column; overflow:hidden; min-width:0; }
+  #channelPanel { width:140px; border-left:1px solid var(--face-dark); overflow-y:auto; background:var(--input-bg); flex-shrink:0; }
+  #channelPanel .chHdr { background:var(--titlebar-grad); color:var(--titlebar-text); padding:2px 5px; font-weight:bold; font-size:11px; }
+  #serverBannerBar { display:none; }
+  #serverBannerBar img { width:100%; max-height:80px; object-fit:cover; display:block; }
+  #chatHeaderLabel { padding:3px 6px; background:var(--face); border-bottom:1px solid var(--face-dark); font-weight:bold; }
+  #messages { flex:1; overflow-y:auto; background:var(--input-bg); padding:6px; }
+  .msg { position:relative; display:flex; gap:6px; margin-bottom:6px; padding:2px 4px; border-radius:3px; transition:background .4s; }
+  .msg.own { background:var(--own-msg-bg); }
+  .msg.pinged { background:#fff3b0 !important; }
+  .msg img.avatar { width:24px; height:24px; flex-shrink:0; border:1px solid var(--face-dark); }
+  .msg .name { font-weight:bold; cursor:pointer; }
+  .msg .name:hover { text-decoration:underline; }
+  .msg .lvltag { font-size:9px; color:#888; margin-left:4px; }
+  .msg .time { color:#888; font-size:10px; margin-left:6px; }
+  .msg .txt { word-break:break-word; }
+  .msg .txt .mention { color:var(--mention-color); font-weight:bold; }
+  .msg .txt .h1 { font-size:20px; font-weight:bold; display:block; }
+  .msg .txt .h2 { font-size:16px; font-weight:bold; display:block; }
+  .msg .txt .h3 { font-size:13px; font-weight:bold; display:block; }
+  .msg .txt code { background:rgba(0,0,0,.08); padding:0 3px; border-radius:2px; font-family:monospace; }
+  .msg .replyBtn { cursor:pointer; }
+  .replyPreview { background:#dceeff; border-left:3px solid #5b9bd5; padding:2px 6px; margin-bottom:2px; font-size:11px; cursor:pointer; border-radius:2px; }
+  .replyPreview:hover { background:#c3e0ff; }
+  #replyBar { display:none; padding:3px 6px; background:#dceeff; border-top:1px solid #5b9bd5; font-size:11px; justify-content:space-between; align-items:center; }
+  #statusLine { height:16px; padding:2px 6px; font-style:italic; color:#333; background:var(--face); }
+  #statusLine.muted { color:#d33; font-style:normal; font-weight:bold; }
+  #inputRow { display:flex; padding:4px; gap:4px; background:var(--face); }
+  #msgInput { flex:1; resize:none; max-height:90px; overflow-y:auto; font-family:var(--font); line-height:1.3; }
+  #sendBtn { padding:0 12px; }
+
+  #pingBadge, #ticketsBadge { position:absolute; top:-6px; right:-6px; background:#c00; color:#fff; border-radius:8px; font-size:9px; padding:0 4px; display:none; }
+  #pingPanel { display:none; position:absolute; top:22px; right:0; width:230px; max-height:220px; overflow-y:auto; background:#fff; border:2px solid; border-color:#fff #808080 #808080 #fff; z-index:30; color:#000; text-align:left; }
+  #pingPanel .pingItem { padding:5px 7px; border-bottom:1px solid #ddd; cursor:pointer; font-weight:normal; }
+  #pingPanel .pingItem:hover { background:#e8eeff; }
+  #pingPanel .pingItem b { display:block; }
+  #pingPanel .empty { padding:8px; color:#777; }
+
+  #overlay, #frugoOverlay, #dirOverlay, #adminTagOverlay, #serverSettingsOverlay, #supportOverlay, #ticketsOverlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.4); align-items:center; justify-content:center; z-index:10; }
+  #profileCard { width:260px; }
+  #profileCard .banner { width:100%; height:70px; object-fit:cover; background:#000080; display:block; }
+  #profileCard .avatarWrap { margin:-24px 0 0 10px; }
+  #profileCard .avatarWrap img { width:48px; height:48px; border:2px solid #fff; background:#fff; }
+  #profileCard .info { padding:8px 10px 12px; }
+  #profileCard .pname { font-weight:bold; font-size:14px; margin-top:4px; }
+  #profileCard .pbio { margin-top:6px; white-space:pre-wrap; }
+  #profileCard .msgBtnRow { padding:0 10px 10px; }
+  #profileCard .msgBtnRow button { width:100%; padding:4px; margin-top:4px; }
+
+  #frugoCard { width:360px; }
+  .frugoTabs { display:flex; border-bottom:1px solid var(--face-dark); }
+  .frugoTab { flex:1; padding:5px; border-radius:0; }
+  .frugoTab.active { background:var(--accent); color:#fff; }
+  #buyTab, #gamesTab { padding:10px; }
+  .frugoItem { display:flex; align-items:center; gap:10px; margin-top:8px; padding:6px; border:1px solid var(--face-dark); background:var(--input-bg); }
+  .frugoItem img { width:40px; height:40px; }
+  .frugoItem div.label { flex:1; }
+  .gameRow { display:flex; justify-content:space-between; align-items:center; margin-top:6px; padding:5px; border:1px solid var(--face-dark); background:var(--input-bg); }
+  #gamePlayArea { margin-top:10px; padding:8px; border:1px dashed var(--face-dark); min-height:20px; }
+  #reactBox { border-radius:4px; }
+
+  .msgToolbar { display:none; position:absolute; top:2px; right:4px; gap:3px; background:var(--face); border:1px solid var(--face-dark); border-radius:3px; padding:1px; }
+  .msg:hover .msgToolbar { display:flex; }
+  .msgToolbar button { font-size:11px; padding:0 4px; }
+  .reactPicker { position:absolute; top:22px; right:0; background:#fff; border:1px solid #888; padding:3px 5px; display:flex; gap:5px; z-index:6; border-radius:3px; }
+  .reactPicker span { cursor:pointer; font-size:15px; }
+  .reactBar { margin-top:3px; display:flex; gap:4px; flex-wrap:wrap; }
+  .reactPill { background:var(--face); border:1px solid var(--face-dark); border-radius:10px; padding:0 6px; font-size:11px; cursor:pointer; }
+  .reactPill.mine { background:var(--accent); color:#fff; }
+  .msg .txt a { color:#0645ad; }
+  body[data-theme="arcade"] .msg .txt a { color:#00fff2; }
+
+  #topBar { position:fixed; top:0; left:0; right:0; text-align:center; background:#000; color:#fff; font-size:11px; padding:4px; z-index:0; }
+  #topBar button { font-size:10px; padding:1px 6px; }
+  #downloadRedirect { display:none; position:fixed; inset:0; background:#000; color:#fff; z-index:60; align-items:center; justify-content:center; font-size:16px; }
+  #chat, #setupWrap, #consentWrap { position:relative; z-index:1; }
+
+  #vcBar { display:flex; gap:6px; padding:4px 6px; background:var(--face); border-bottom:1px solid var(--face-dark); }
+  #vcTiles { display:flex; gap:8px; flex-wrap:wrap; padding:8px; background:var(--input-bg); border-bottom:1px solid var(--face-dark); }
+  .vcTile { width:84px; text-align:center; font-size:10px; }
+  .vcTile img.tileAvatar { width:56px; height:56px; border-radius:50%; border:2px solid var(--face-dark); object-fit:cover; }
+  .vcTile video { width:84px; height:56px; background:#000; object-fit:cover; border:1px solid var(--face-dark); }
+  .vcTile .muted { color:#c00; }
+  #vcRoster .navitem { padding-left:16px; font-size:11px; }
+  #chat.dragOver { outline:3px dashed var(--accent); outline-offset:-3px; }
+  #vcFullscreenOverlay { display:none; position:fixed; inset:0; background:#000; z-index:50; }
+  #vcFsLeft { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; position:relative; min-width:0; }
+  #vcFsWatchers { position:absolute; top:8px; left:8px; right:8px; color:#fff; font-size:11px; background:rgba(0,0,0,.5); padding:3px 8px; border-radius:3px; }
+  #vcFullscreenVideo { max-width:95%; max-height:82%; }
+  #vcFsControls { display:flex; align-items:center; gap:6px; padding:8px; background:rgba(0,0,0,.6); position:absolute; bottom:0; left:0; right:0; }
+  #vcFsControls input[type=range] { flex:1; }
+  #vcFsVolumeLabel { color:#fff; font-size:11px; width:38px; }
+  #vcFsChat { width:220px; background:var(--face); display:flex; flex-direction:column; border-left:1px solid var(--face-dark); }
+  #vcFsMessages { flex:1; overflow-y:auto; background:var(--input-bg); padding:4px; font-size:11px; }
+  #vcFsMessages div { margin-bottom:3px; }
+  #vcFsInputRow { display:flex; padding:4px; gap:3px; }
+  #vcFsInputRow input { flex:1; }
+  .vcTile video { cursor:zoom-in; }
+  #emojiPickerPanel { display:none; position:absolute; bottom:100%; left:4px; right:4px; max-height:140px; overflow-y:auto; background:#fff; border:1px solid #888; flex-wrap:wrap; gap:5px; padding:6px; z-index:25; }
+  #emojiPickerPanel span { cursor:pointer; font-size:18px; }
+  #emojiPickerPanel span.faceEmoticon { font-size:13px; font-family:monospace; border:1px solid #ccc; padding:1px 4px; border-radius:3px; }
+  .attachWrap { margin-top:3px; }
+  .attachImg { max-width:220px; max-height:220px; display:block; border:1px solid var(--face-dark); cursor:pointer; }
+  #imgLightboxOverlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.85); z-index:50; align-items:center; justify-content:center; cursor:zoom-out; }
+  #imgLightboxImg { max-width:95%; max-height:95%; }
+  #attachPreviewBar { display:none; align-items:center; gap:6px; padding:4px 6px; background:var(--face); border-top:1px solid var(--face-dark); }
+  #attachPreviewBar img { height:36px; border:1px solid var(--face-dark); }
+  #gifPickerPanel { display:none; position:absolute; bottom:100%; left:4px; right:4px; max-height:260px; overflow-y:auto; background:#fff; border:1px solid #888; padding:6px; z-index:25; }
+  #gifPickerPanel input { width:100%; }
+  #gifPickerPanel .gifGrid { display:grid; grid-template-columns:repeat(3,1fr); gap:4px; margin-top:6px; }
+  #gifPickerPanel .gifGrid img { width:100%; cursor:pointer; border:1px solid var(--face-dark); }
+  #gifPickerPanel .gifTabs { display:flex; gap:4px; margin-top:4px; }
+
+  body[data-theme="win01"] {
+    --body-bg:#000; --face:#000; --face-dark:#fff; --face-light:#fff;
+    --titlebar-grad:#000; --titlebar-text:#fff; --accent:#fff;
+    --text:#fff; --input-bg:#000; --own-msg-bg:#111;
+    --font:'Courier New',monospace; --mention-color:#fff; --radius:0px;
+  }
+  body[data-theme="win01"] .win { border-width:1px; box-shadow:none; }
+  body[data-theme="win01"] .titlebar { border-bottom:1px solid #fff; }
+  body[data-theme="win01"] button, body[data-theme="win01"] input, body[data-theme="win01"] textarea, body[data-theme="win01"] select { border-width:1px; color:#fff; }
+
+  body[data-theme="vista"] {
+    --body-bg:#5b8dc4; --face:#eef4fb; --face-dark:#7fa7d6; --face-light:#fff;
+    --titlebar-grad:linear-gradient(180deg,#bcd9f7,#7ab0e8 45%,#4c8bd4); --titlebar-text:#0a2c52;
+    --accent:#3d7fd1; --own-msg-bg:#dcebfb; --radius:9px; --font:'Segoe UI',Tahoma,sans-serif;
+  }
+  body[data-theme="vista"] .win { border-radius:9px; box-shadow:0 4px 18px rgba(0,40,90,.45); }
+  body[data-theme="vista"] .titlebar { border-radius:9px 9px 0 0; text-shadow:0 1px 0 rgba(255,255,255,.6); }
+
+  body[data-theme="me"] {
+    --body-bg:#2f7d5b; --face:#dff0e6; --face-dark:#7fbf9e; --face-light:#fff;
+    --titlebar-grad:linear-gradient(90deg,#0a6e42,#2fa876); --titlebar-text:#fff;
+    --accent:#1f8f5f; --own-msg-bg:#c9f0da; --font:Tahoma,sans-serif;
+  }
+
+  body[data-theme="vapor"] {
+    --body-bg:linear-gradient(180deg,#ff71ce,#b967ff 55%,#01cdfe); --face:#2b1055; --face-dark:#ff71ce; --face-light:#01cdfe;
+    --titlebar-grad:linear-gradient(90deg,#ff71ce,#b967ff,#01cdfe); --titlebar-text:#fffb96;
+    --accent:#b967ff; --text:#fffb96; --input-bg:#1a0b2e; --own-msg-bg:#3d1a5e;
+    --font:'Courier New',monospace; --mention-color:#01cdfe; --radius:0px;
+  }
+  body[data-theme="vapor"] .win { box-shadow:0 0 14px #ff71ce, 0 0 22px #01cdfe inset; }
+  body[data-theme="vapor"] input, body[data-theme="vapor"] textarea { color:#fffb96; }
+</style>
+</head>
+<body>
+<div id="topBar">App version coming soon! <button id="downloadAppBtn" style="margin-left:8px;">⬇️ Download App</button></div>
+<div id="downloadRedirect">Redirecting to your download...</div>
+
+<div id="setupWrap">
+  <div id="profileForm" class="win" style="flex-direction:column;">
+    <div class="titlebar"><span id="formTitle">Create Account</span><span class="x">✕</span></div>
+    <div class="body">
+      <label>Username</label>
+      <input type="text" id="nameInput" maxlength="20" placeholder="e.g. FruityGareo">
+      <div class="err" id="nameErr"></div>
+      <label>Display Name (optional)</label>
+      <input type="text" id="displayInput" maxlength="30" placeholder="Shown instead of your username">
+      <label>Thinking (shows under your name)</label>
+      <input type="text" id="thinkingInput" maxlength="40" placeholder="e.g. 🍕 thinking about pizza">
+      <label>Bio</label>
+      <textarea id="bioInput" maxlength="150" placeholder="Say something about yourself..."></textarea>
+      <div class="row">
+        <label>Avatar</label>
+        <input type="file" id="avatarInput" accept="image/*">
+        <div class="cropFrame" id="avatarFrame" style="width:96px;height:96px;"><img id="avatarImg" style="display:none;"></div>
+        <div class="zoomRow"><span>Zoom</span><input type="range" id="avatarZoom" min="0" max="100" value="0"></div>
+      </div>
+      <div class="row">
+        <label>Banner</label>
+        <input type="file" id="bannerInput" accept="image/*">
+        <div class="cropFrame" id="bannerFrame" style="width:100%;height:80px;"><img id="bannerImg" style="display:none;"></div>
+        <div class="zoomRow"><span>Zoom</span><input type="range" id="bannerZoom" min="0" max="100" value="0"></div>
+      </div>
+      <div class="divider">
+        <label>Style</label>
+        <select id="themeSelect">
+          <option value="98">Windows 98</option>
+          <option value="xp">Windows XP</option>
+          <option value="win10">Windows 10</option>
+          <option value="arcade">Arcade</option>
+          <option value="vapor">Vaporwave</option>
+          <optgroup label="🍹 Frugo Styles" id="frugoThemeGroup" style="display:none;">
+            <option value="win01">Windows 0.1</option>
+            <option value="vista">Windows Vista</option>
+            <option value="me">Windows Me</option>
+          </optgroup>
+        </select>
+        <label style="margin-top:6px;">Window Size</label>
+        <select id="sizeSelect">
+          <option value="compact">Compact</option>
+          <option value="default">Default</option>
+          <option value="large">Large</option>
+        </select>
+        <label style="margin-top:6px;">Status</label>
+        <select id="statusSelect">
+          <option value="auto">Online (auto-away)</option>
+          <option value="online">Online</option>
+          <option value="away">Away</option>
+          <option value="dnd">Do Not Disturb</option>
+          <option value="offline">Invisible</option>
+        </select>
+        <button type="button" id="notifPermBtn" style="width:100%;margin-top:6px;">Enable Desktop Notifications</button>
+      </div>
+      <div class="divider" id="recoverySetupRow">
+        <a href="#" id="recoverLinkBtn" style="font-size:11px;">Already have an account? Recover it with your code</a>
+      </div>
+      <div class="divider" id="recoveryEditRow" style="display:none;">
+        <label>Your Recovery Code</label>
+        <p style="font-size:11px;">Save this somewhere safe — it's the <b>only</b> way to get your account back if you clear cookies or switch browsers.</p>
+        <input type="text" id="recoveryCodeBox" readonly style="width:100%;">
+        <button type="button" id="copyRecoveryBtn" style="width:100%;margin-top:4px;">Copy Code</button>
+        <label style="margin-top:8px;">Email (optional — for future site update notices)</label>
+        <input type="email" id="emailInput" placeholder="you@example.com" style="width:100%;">
+        <button type="button" id="deleteAccountBtn" style="width:100%;margin-top:10px;color:#a00;">Delete Account</button>
+      </div>
+      <div class="actions">
+        <button id="cancelBtn" style="display:none;">Cancel</button>
+        <button id="enterBtn">Create Account</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="formOverlay"></div>
+
+<div id="consentWrap" style="display:none;">
+  <div class="win" style="width:320px;">
+    <div class="titlebar"><span>Before you continue</span></div>
+    <div style="padding:14px;">
+      <p><b>Wait!</b> Before you sign in, do you want to enable these settings?</p>
+      <label><input type="checkbox" id="consentNotif"> Enable Desktop Notifications</label>
+      <label style="margin-top:8px;display:block;">Style</label>
+      <select id="consentTheme">
+        <option value="98">Windows 98</option>
+        <option value="xp">Windows XP</option>
+        <option value="win10">Windows 10</option>
+        <option value="arcade">Arcade</option>
+        <option value="vapor">Vaporwave</option>
+      </select>
+      <label style="margin-top:6px;display:block;">Window Size</label>
+      <select id="consentSize">
+        <option value="compact">Compact</option>
+        <option value="default">Default</option>
+        <option value="large">Large</option>
+      </select>
+      <div style="margin-top:14px;display:flex;gap:6px;">
+        <button id="consentNoBtn" style="flex:1;">No thanks!</button>
+        <button id="consentYesBtn" style="flex:1;">Accept</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="chat" class="win">
+  <div class="titlebar">
+    <span>FruityChat</span>
+    <div class="btns">
+      <span class="statsTag" id="statsDisplay">Lv.0 · 0🍹</span>
+      <button class="tb" id="adminGearBtn" style="display:none;" title="Admin: custom tags">⚙️</button>
+      <button class="tb" id="ticketsBtn" style="display:none;" title="Support tickets">🎫<span id="ticketsBadge" style="display:none;"></span></button>
+      <button class="tb" id="supportBtn" title="Support">🆘</button>
+      <button class="tb" id="frugoBtn">Frugo</button>
+      <button class="tb" id="pingBtn">🔔<span id="pingBadge"></span><div id="pingPanel"></div></button>
+      <button class="tb" id="settingsBtn">Settings</button>
+      <span class="x">✕</span>
+    </div>
+  </div>
+  <div class="body">
+    <div id="sidebar">
+      <button class="navitem" id="openDirectoryBtn" style="width:100%;text-align:left;border:none;">🔍 Search Users</button>
+      <div class="navitem active" id="mainChatNav"><span class="left">💬 Main Chat</span></div>
+      <div class="sechdr">Voice</div>
+      <div class="navitem" id="mainVcNav"><span class="left">🔊 Main VC</span><span class="badge" id="vcCountBadge" style="display:none;"></span></div>
+      <div id="vcRoster"></div>
+      <div class="sechdr" id="onlineHdr">Online <span id="dirPlus" style="float:right;cursor:pointer;">➕</span></div>
+      <div id="onlineList"></div>
+      <div class="sechdr">Direct Messages</div>
+      <div id="dmList"></div>
+      <div class="sechdr">Servers</div>
+      <div id="serverList"></div>
+      <div class="navitem" id="newServerBtn"><span class="left">+ New Server</span></div>
+    </div>
+    <div id="main">
+      <div id="mainCenter">
+        <div id="chatHeaderLabel" style="display:flex;justify-content:space-between;align-items:center;">
+          <span id="chatHeaderText">Main Chat</span>
+          <button class="tb" id="editServerBtn" style="display:none;">Edit Server</button>
+        </div>
+        <div id="serverBannerBar" style="display:none;"><img id="serverBannerImg"></div>
+        <div id="vcBar" style="display:none;">
+          <button id="vcMicBtn">🎤 Mute</button>
+          <button id="vcScreenBtn">🖥️ Share Screen</button>
+          <button id="vcLeaveBtn">📞 Leave</button>
+        </div>
+        <div id="vcTiles" style="display:none;"></div>
+        <div id="messages"></div>
+        <div id="replyBar">
+          <span>Replying to <b id="replyToName"></b>: <span id="replyToPreview"></span></span>
+          <button id="cancelReplyBtn">✕</button>
+        </div>
+        <div id="statusLine"></div>
+        <div id="attachPreviewBar" style="display:none;"></div>
+        <div id="inputRow" style="position:relative;">
+          <div id="emojiPickerPanel"></div>
+          <div id="gifPickerPanel"></div>
+          <textarea id="msgInput" rows="1" placeholder="Type a message... @name to ping, # for big text, Ctrl+Enter for a new line, : for emojis" maxlength="1500"></textarea>
+          <input type="file" id="attachInput" style="display:none;">
+          <button type="button" id="attachBtn" title="Attach a file">📎</button>
+          <button type="button" id="gifBtn" title="GIFs">🎞️</button>
+          <button type="button" id="emojiBtn" title="Emojis">😀</button>
+          <button id="sendBtn">Send</button>
+        </div>
+      </div>
+      <div id="channelPanel" style="display:none;"></div>
+    </div>
+  </div>
+</div>
+
+<div id="overlay">
+  <div id="profileCard" class="win">
+    <div class="titlebar"><span>Profile</span><span class="x" id="closeProfile">✕</span></div>
+    <img class="banner" id="pBanner">
+    <div class="avatarWrap"><img id="pAvatar"></div>
+    <div class="info">
+      <div class="pname" id="pName"></div>
+      <div id="pUsername" style="font-size:11px;color:#777;display:none;"></div>
+      <div class="pbio" id="pBio"></div>
+    </div>
+    <div class="msgBtnRow">
+      <button id="dmFromProfileBtn">Send Message</button>
+      <div id="adminBtnRow" style="display:none;">
+        <button id="banToggleBtn"></button>
+        <button id="makeAdminBtn">Make Admin</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="frugoOverlay">
+  <div id="frugoCard" class="win">
+    <div class="titlebar"><span>Frugo Shop</span><span class="x" id="closeFrugo">✕</span></div>
+    <div class="frugoTabs">
+      <button class="frugoTab active" id="tabBuyBtn">Buy</button>
+      <button class="frugoTab" id="tabGamesBtn">Games</button>
+    </div>
+    <div id="buyTab">
+      <div>Your balance: <b id="balanceText">0</b> 🍹</div>
+      <div class="frugoItem">
+        <img src="1frugo.svg" onerror="this.style.display='none'">
+        <div class="label">1 Day Frugo<br><small>50 🍹</small></div>
+        <button id="buy1Btn">Buy</button>
+      </div>
+      <div class="frugoItem">
+        <img src="3frugo.svg" onerror="this.style.display='none'">
+        <div class="label">3 Day Frugo<br><small>150 🍹</small></div>
+        <button id="buy3Btn">Buy</button>
+      </div>
+    </div>
+    <div id="gamesTab" style="display:none;">
+      <p>Play little games to earn Frugo's. The harder the game is, the more frugos you get!</p>
+      <div id="gamesList"></div>
+      <div id="gamePlayArea"></div>
+    </div>
+  </div>
+</div>
+
+<div id="vcFullscreenOverlay">
+  <div id="vcFsLeft">
+    <div id="vcFsWatchers">Watching: just you</div>
+    <video id="vcFullscreenVideo" autoplay playsinline></video>
+    <div id="vcFsControls">
+      <button id="vcFsMuteBtn">🔊</button>
+      <input type="range" id="vcFsVolume" min="0" max="200" value="100">
+      <span id="vcFsVolumeLabel">100%</span>
+      <button id="vcFsCloseBtn">✕ Close</button>
+    </div>
+  </div>
+  <div id="vcFsChat">
+    <div class="sechdr">Chat</div>
+    <div id="vcFsMessages"></div>
+    <div id="vcFsInputRow"><input type="text" id="vcFsChatInput" placeholder="Chat..."><button id="vcFsSendBtn">Send</button></div>
+  </div>
+</div>
+
+<div id="imgLightboxOverlay">
+  <img id="imgLightboxImg">
+</div>
+
+<div id="supportOverlay">
+  <div class="win" style="width:300px;">
+    <div class="titlebar"><span>Support</span><span class="x" id="closeSupport">✕</span></div>
+    <div style="padding:10px;" id="supportBody">
+      <p><b>What happened!</b></p>
+      <div id="supportCategoryList"></div>
+    </div>
+  </div>
+</div>
+
+<div id="ticketsOverlay">
+  <div class="win" style="width:340px;">
+    <div class="titlebar"><span>Support Tickets</span><span class="x" id="closeTickets">✕</span></div>
+    <div style="padding:10px;max-height:60vh;overflow-y:auto;" id="ticketsBody"></div>
+  </div>
+</div>
+
+<div id="adminTagOverlay">
+  <div class="win" style="width:280px;">
+    <div class="titlebar"><span>Custom Tags (Admin)</span><span class="x" id="closeAdminTag">✕</span></div>
+    <div style="padding:10px;">
+      <label>User</label>
+      <select id="tagUserSelect" style="width:100%;"></select>
+      <label style="margin-top:6px;display:block;">Custom Tag Text</label>
+      <input type="text" id="tagTextInput" maxlength="20" style="width:100%;">
+      <label style="margin-top:6px;display:block;">Custom Emoji</label>
+      <input type="text" id="tagEmojiInput" maxlength="4" style="width:100%;" placeholder="e.g. 🍄">
+      <div style="margin-top:10px;display:flex;gap:6px;">
+        <button id="tagClearBtn" style="flex:1;">Clear</button>
+        <button id="tagSaveBtn" style="flex:1;">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="serverSettingsOverlay">
+  <div class="win" style="width:420px;">
+    <div class="titlebar"><span id="ssTitle">Server Settings</span><span class="x" id="closeSs">✕</span></div>
+    <div style="padding:12px;max-height:70vh;overflow-y:auto;" id="ssBody"></div>
+  </div>
+</div>
+
+<div id="dirOverlay">
+  <div id="dirCard" class="win" style="width:300px;">
+    <div class="titlebar"><span>Users</span><span class="x" id="closeDir">✕</span></div>
+    <div style="padding:8px;">
+      <input type="text" id="dirSearch" placeholder="Search users..." style="width:100%;">
+      <div class="frugoTabs" style="margin-top:6px;">
+        <button class="frugoTab active" id="dirTabOnline">Online</button>
+        <button class="frugoTab" id="dirTabOffline">Offline</button>
+        <button class="frugoTab" id="dirTabAll">All</button>
+      </div>
+      <div id="dirList" style="max-height:260px;overflow-y:auto;margin-top:6px;"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyACZsyvXl-05UJr_pFjIlW1yjL1Id8kBb4",
+  authDomain: "multiplayer-84fcc.firebaseapp.com",
+  databaseURL: "https://multiplayer-84fcc-default-rtdb.firebaseio.com",
+  projectId: "multiplayer-84fcc",
+  storageBucket: "multiplayer-84fcc.firebasestorage.app",
+  messagingSenderId: "1018280244915",
+  appId: "1:1018280244915:web:f9f09d7b09ec51aeaba2c6"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const storage = firebase.storage();
+async function uploadDataUrl(dataUrl, path, onProgress) {
+  const blob = await (await fetch(dataUrl)).blob();
+  return uploadBlob(blob, path, onProgress);
+}
+async function uploadBlob(blob, path, onProgress) {
+  const ref = storage.ref(path);
+  const task = ref.put(blob);
+  await new Promise((resolve, reject) => {
+    let timer;
+    const resetTimer = () => { clearTimeout(timer); timer = setTimeout(() => { task.cancel(); reject(new Error('Upload stalled for 30s — check your Storage rules and CORS settings.')); }, 30000); };
+    resetTimer();
+    task.on('state_changed',
+      snap => { resetTimer(); if (onProgress) onProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)); },
+      err => { clearTimeout(timer); reject(err); },
+      () => { clearTimeout(timer); resolve(); }
+    );
+  });
+  return await ref.getDownloadURL();
+}
+
+/* ---------- Theme + size + status (device preferences) ---------- */
+function applyTheme(t) { document.body.dataset.theme = t; localStorage.setItem('fc_theme', t); const sel = document.getElementById('themeSelect'); if (sel) sel.value = t; }
+function applySize(s) {
+  const sizes = { compact: [600, 420], default: [760, 500], large: [920, 620] };
+  const [w, h] = sizes[s] || sizes.default;
+  document.getElementById('chat').style.width = w + 'px';
+  document.getElementById('chat').style.height = h + 'px';
+  localStorage.setItem('fc_size', s);
+}
+const savedTheme = localStorage.getItem('fc_theme') || '98';
+applyTheme(savedTheme); document.getElementById('themeSelect').value = savedTheme;
+const savedSize = localStorage.getItem('fc_size') || 'default';
+applySize(savedSize); document.getElementById('sizeSelect').value = savedSize;
+document.getElementById('themeSelect').onchange = e => applyTheme(e.target.value);
+document.getElementById('sizeSelect').onchange = e => applySize(e.target.value);
+
+let statusMode = localStorage.getItem('fc_status') || 'auto';
+document.getElementById('statusSelect').value = statusMode;
+function effectiveStatus() { if (statusMode === 'auto') return document.hidden ? 'away' : 'online'; return statusMode; }
+function pushPresenceStatus() { if (!profile) return; const ref = db.ref('presence/' + uid); ref.set({ name: profile.name, ts: firebase.database.ServerValue.TIMESTAMP, status: effectiveStatus() }); ref.onDisconnect().remove(); }
+document.addEventListener('visibilitychange', () => { pushPresenceStatus(); if (!document.hidden) updateTitle(); });
+document.getElementById('statusSelect').onchange = e => { statusMode = e.target.value; localStorage.setItem('fc_status', statusMode); pushPresenceStatus(); };
+
+let uid = localStorage.getItem('fc_uid');
+if (!uid) { uid = 'u' + Math.random().toString(36).slice(2, 10); localStorage.setItem('fc_uid', uid); }
+let profile = JSON.parse(localStorage.getItem('fc_profile') || 'null');
+let profilesCache = {}, adminsCache = {}, bannedCache = {}, serversCache = {}, statsCache = {}, frugoCache = {}, customTagsCache = {};
+const DEFAULT_AVATAR = 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96"><rect width="96" height="96" fill="#000080"/><text x="48" y="64" font-size="48" fill="#fff" text-anchor="middle">?</text></svg>');
+const DEFAULT_BANNER = 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="300" height="80"><rect width="300" height="80" fill="#1084d0"/></svg>');
+const escapeHtml = s => { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; };
+const displayNameOf = p => (p && (p.display || p.name)) || 'Unknown';
+const pairKey = (a, b) => [a, b].sort().join('~');
+function typingKeyFor(view) { return (view === 'main' || view.startsWith('vc:') || view.startsWith('srv:') || view.startsWith('srvch:')) ? view : 'dm_' + pairKey(uid, view); }
+const isAdmin = () => !!adminsCache[uid];
+const hasFrugo = id => frugoCache[id] && frugoCache[id].expires > Date.now();
+
+/* ---------- Ban check ---------- */
+db.ref('banned/' + uid).on('value', snap => {
+  if (snap.val()) {
+    db.ref('presence/' + uid).remove();
+    document.body.innerHTML = '<div class="win" style="width:320px;"><div class="titlebar"><span>Access Denied</span></div><div style="padding:20px;text-align:center;">You have been banned from this chatroom.</div></div>';
+  }
+});
+db.ref('admins').on('value', snap => { adminsCache = snap.val() || {}; document.getElementById('adminGearBtn').style.display = isAdmin() ? 'block' : 'none'; });
+db.ref('customTags').on('value', snap => { customTagsCache = snap.val() || {}; document.getElementById('adminGearBtn').style.display = isAdmin() ? 'block' : 'none'; });
+function tagPrefixFor(id) {
+  const t = customTagsCache[id];
+  if (!t) return '';
+  return (t.emoji ? t.emoji + ' ' : '') + (t.tag ? `[${t.tag}] ` : '');
+}
+db.ref('banned').on('value', snap => { bannedCache = snap.val() || {}; });
+db.ref('stats').on('value', snap => { statsCache = snap.val() || {}; refreshStatsDisplay(); });
+db.ref('frugoStatus').on('value', snap => {
+  frugoCache = snap.val() || {};
+  const el = document.getElementById('msgInput'); if (el) el.maxLength = hasFrugo(uid) ? 2500 : 1500;
+  const grp = document.getElementById('frugoThemeGroup');
+  if (grp) grp.style.display = hasFrugo(uid) ? '' : 'none';
+  if (!hasFrugo(uid) && ['win01', 'vista', 'me'].includes(document.body.dataset.theme)) applyTheme('98');
+});
+function refreshStatsDisplay() {
+  const mine = statsCache[uid] || { points: 0, level: 0 };
+  document.getElementById('statsDisplay').textContent = `Lv.${mine.level || 0} · ${mine.points || 0}🍹`;
+}
+function updateTitle() {
+  const total = Object.values(unreadMap).reduce((a, b) => a + b, 0) + pings.length;
+  document.title = total > 0 ? `FruityChat (${total})` : 'FruityChat';
+}
+
+/* ---------- Cropper ---------- */
+function makeCropper(frameEl, imgEl, zoomEl, frameW, frameH) {
+  let natW = 0, natH = 0, minScale = 1, scale = 1, offX = 0, offY = 0;
+  let dragging = false, startX = 0, startY = 0, startOffX = 0, startOffY = 0;
+  function apply() { imgEl.style.width = (natW * scale) + 'px'; imgEl.style.height = (natH * scale) + 'px'; imgEl.style.left = offX + 'px'; imgEl.style.top = offY + 'px'; }
+  function clamp() { const w = natW * scale, h = natH * scale; offX = Math.min(0, Math.max(offX, frameW - w)); offY = Math.min(0, Math.max(offY, frameH - h)); }
+  frameEl.addEventListener('pointerdown', e => { if (!natW) return; dragging = true; startX = e.clientX; startY = e.clientY; startOffX = offX; startOffY = offY; frameEl.setPointerCapture(e.pointerId); });
+  frameEl.addEventListener('pointermove', e => { if (!dragging) return; offX = startOffX + (e.clientX - startX); offY = startOffY + (e.clientY - startY); clamp(); apply(); });
+  frameEl.addEventListener('pointerup', () => dragging = false);
+  zoomEl.addEventListener('input', () => { scale = minScale * (1 + zoomEl.value / 50); clamp(); apply(); });
+  return {
+    load(dataUrl) {
+      return new Promise(res => {
+        const img = new Image();
+        img.onload = () => {
+          natW = img.width; natH = img.height;
+          minScale = Math.max(frameW / natW, frameH / natH);
+          scale = minScale; offX = (frameW - natW * scale) / 2; offY = (frameH - natH * scale) / 2;
+          zoomEl.value = 0; imgEl.src = dataUrl; imgEl.style.display = 'block'; apply(); res();
+        };
+        img.src = dataUrl;
+      });
+    },
+    hasImage() { return !!natW; },
+    getResult(outW, outH) {
+      const c = document.createElement('canvas'); c.width = outW; c.height = outH;
+      const ratio = outW / frameW;
+      c.getContext('2d').drawImage(imgEl, offX * ratio, offY * ratio, natW * scale * ratio, natH * scale * ratio);
+      return c.toDataURL('image/png', 0.85);
+    }
+  };
+}
+const avatarCropper = makeCropper(document.getElementById('avatarFrame'), document.getElementById('avatarImg'), document.getElementById('avatarZoom'), 96, 96);
+const bannerCropper = makeCropper(document.getElementById('bannerFrame'), document.getElementById('bannerImg'), document.getElementById('bannerZoom'), 300, 80);
+function fileToDataUrl(file) { return new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result); r.readAsDataURL(file); }); }
+document.getElementById('avatarInput').onchange = async e => { if (e.target.files[0]) avatarCropper.load(await fileToDataUrl(e.target.files[0])); };
+document.getElementById('bannerInput').onchange = async e => { if (e.target.files[0]) bannerCropper.load(await fileToDataUrl(e.target.files[0])); };
+
+/* ---------- Username check ---------- */
+async function nameTaken(name, excludeUid) {
+  const snap = await db.ref('profiles').once('value');
+  const all = snap.val() || {};
+  return Object.keys(all).some(id => id !== excludeUid && (all[id].name || '').toLowerCase() === name.toLowerCase());
+}
+
+/* ---------- Profile form ---------- */
+let formMode = 'setup';
+function openForm(mode) {
+  formMode = mode;
+  document.getElementById('nameErr').textContent = '';
+  if (mode === 'edit') {
+    document.getElementById('formTitle').textContent = 'Edit Profile';
+    document.getElementById('enterBtn').textContent = 'Save Changes';
+    document.getElementById('cancelBtn').style.display = 'block';
+    document.getElementById('recoverySetupRow').style.display = 'none';
+    document.getElementById('recoveryEditRow').style.display = 'block';
+    document.getElementById('recoveryCodeBox').value = uid;
+    db.ref('privateEmails/' + uid).once('value').then(s => { document.getElementById('emailInput').value = s.val() || ''; });
+    document.getElementById('nameInput').value = profile.name;
+    document.getElementById('displayInput').value = profile.display || '';
+    document.getElementById('thinkingInput').value = profile.thinking || '';
+    document.getElementById('bioInput').value = profile.bio || '';
+    avatarCropper.load(profile.avatar || DEFAULT_AVATAR);
+    bannerCropper.load(profile.banner || DEFAULT_BANNER);
+    document.getElementById('formOverlay').style.display = 'flex';
+    document.getElementById('formOverlay').appendChild(document.getElementById('profileForm'));
+    document.getElementById('setupWrap').style.display = 'none';
+  } else {
+    document.getElementById('formTitle').textContent = 'Create Account';
+    document.getElementById('enterBtn').textContent = 'Create Account';
+    document.getElementById('cancelBtn').style.display = 'none';
+    document.getElementById('recoverySetupRow').style.display = 'block';
+    document.getElementById('recoveryEditRow').style.display = 'none';
+  }
+}
+document.getElementById('cancelBtn').onclick = () => { document.getElementById('formOverlay').style.display = 'none'; };
+document.getElementById('copyRecoveryBtn').onclick = () => { const box = document.getElementById('recoveryCodeBox'); box.select(); document.execCommand('copy'); };
+document.getElementById('recoverLinkBtn').onclick = async e => {
+  e.preventDefault();
+  const code = prompt('Enter your recovery code:');
+  if (!code) return;
+  const snap = await db.ref('profiles/' + code.trim()).once('value');
+  if (!snap.exists()) { alert("No account found with that code."); return; }
+  localStorage.setItem('fc_uid', code.trim());
+  localStorage.setItem('fc_profile', JSON.stringify(snap.val()));
+  location.reload();
+};
+function grantAdminIfOwner() { if (profile && ['Carterplays6', 'MEPHONE4S'].includes(profile.name)) db.ref('admins/' + uid).set(true); }
+function withTimeout(promise, ms, msg) {
+  return Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error(msg)), ms))]);
+}
+document.getElementById('enterBtn').onclick = async () => {
+  const name = document.getElementById('nameInput').value.trim();
+  const errEl = document.getElementById('nameErr');
+  errEl.textContent = '';
+  if (!name) { errEl.textContent = 'Pick a username first.'; return; }
+  if (name.length < 2) { errEl.textContent = 'Username too short.'; return; }
+  document.getElementById('enterBtn').disabled = true;
+  let taken;
+  try {
+    taken = await withTimeout(nameTaken(name, formMode === 'edit' ? uid : null), 10000, "Can't reach the server — check your connection (this fails under the Neocities free-tier restriction, see earlier notes).");
+  } catch (e) {
+    errEl.textContent = e.message;
+    document.getElementById('enterBtn').disabled = false;
+    return;
+  }
+  if (taken) { errEl.textContent = 'That username is already taken.'; document.getElementById('enterBtn').disabled = false; return; }
+  let avatarUrl = DEFAULT_AVATAR, bannerUrl = DEFAULT_BANNER;
+  try {
+    if (avatarCropper.hasImage()) avatarUrl = await uploadDataUrl(avatarCropper.getResult(96, 96), `avatars/${uid}_${Date.now()}.png`);
+    if (bannerCropper.hasImage()) bannerUrl = await uploadDataUrl(bannerCropper.getResult(300, 80), `banners/${uid}_${Date.now()}.png`);
+  } catch (e) {
+    errEl.textContent = 'Image upload failed — check your Storage rules are open. Saving without new images.';
+    avatarUrl = (formMode === 'edit' && profile.avatar) ? profile.avatar : DEFAULT_AVATAR;
+    bannerUrl = (formMode === 'edit' && profile.banner) ? profile.banner : DEFAULT_BANNER;
+  }
+  document.getElementById('enterBtn').disabled = false;
+  profile = {
+    name,
+    display: document.getElementById('displayInput').value.trim() || null,
+    thinking: document.getElementById('thinkingInput').value.trim() || null,
+    bio: document.getElementById('bioInput').value.trim(),
+    avatar: avatarUrl,
+    banner: bannerUrl
+  };
+  localStorage.setItem('fc_profile', JSON.stringify(profile));
+  db.ref('profiles/' + uid).set(profile);
+  const emailVal = document.getElementById('emailInput').value.trim();
+  if (emailVal) db.ref('privateEmails/' + uid).set(emailVal); else db.ref('privateEmails/' + uid).remove();
+  grantAdminIfOwner();
+  pushPresenceStatus();
+  if (formMode === 'setup') {
+    document.getElementById('setupWrap').style.display = 'none';
+    document.getElementById('consentWrap').style.display = 'flex';
+    document.getElementById('consentTheme').value = localStorage.getItem('fc_theme') || '98';
+    document.getElementById('consentSize').value = localStorage.getItem('fc_size') || 'default';
+  } else { document.getElementById('formOverlay').style.display = 'none'; }
+};
+document.getElementById('consentYesBtn').onclick = () => {
+  applyTheme(document.getElementById('consentTheme').value); document.getElementById('themeSelect').value = document.getElementById('consentTheme').value;
+  applySize(document.getElementById('consentSize').value); document.getElementById('sizeSelect').value = document.getElementById('consentSize').value;
+  if (document.getElementById('consentNotif').checked && 'Notification' in window) Notification.requestPermission();
+  document.getElementById('consentWrap').style.display = 'none';
+  enterChat();
+};
+document.getElementById('consentNoBtn').onclick = () => {
+  document.getElementById('consentWrap').style.display = 'none';
+  enterChat();
+};
+
+/* ---------- Chat state ---------- */
+let chatStarted = false;
+let currentView = 'main';
+let currentMsgRef = null, currentMsgHandler = null, currentTypingRef = null, currentTypingHandler = null;
+let oldestLoadedKey = null, capturedOldest = false, loadingMore = false;
+let dmPartners = {}, unreadMap = {}, watchedConvos = new Set(), pings = [], presenceData = {}, lastActivity = {};
+let searchTerm = '';
+let replyContext = null;
+
+function enterChat() {
+  document.getElementById('chat').style.display = 'flex';
+  document.getElementById('settingsBtn').onclick = () => openForm('edit');
+  document.getElementById('mainChatNav').onclick = () => switchView('main');
+  document.getElementById('mainVcNav').onclick = () => joinVC();
+  document.getElementById('vcLeaveBtn').onclick = () => leaveVC();
+  document.getElementById('vcMicBtn').onclick = () => toggleMic();
+  document.getElementById('vcScreenBtn').onclick = () => toggleScreenShare();
+  document.getElementById('notifPermBtn').onclick = () => { if ('Notification' in window) Notification.requestPermission(); };
+  document.getElementById('openDirectoryBtn').onclick = openDirectory;
+  document.getElementById('dirPlus').onclick = e => { e.stopPropagation(); openDirectory(); };
+  document.getElementById('newServerBtn').onclick = () => {
+    const name = prompt('Server name:');
+    if (name && name.trim()) db.ref('servers').push({ name: name.trim(), owner: uid });
+  };
+  if (chatStarted) return;
+  chatStarted = true;
+
+  pushPresenceStatus();
+  db.ref('presence/' + uid).onDisconnect().remove();
+  setInterval(pushPresenceStatus, 20000);
+
+  db.ref('profiles').on('value', snap => { profilesCache = snap.val() || {}; renderOnline(); renderDMList(); renderServers(); renderPings(); rerenderNames(); });
+  db.ref('presence').on('value', snap => { presenceData = snap.val() || {}; renderOnline(); });
+
+  let lastTyping = {};
+
+  db.ref('dmIndex/' + uid).on('value', snap => {
+    dmPartners = snap.val() || {};
+    renderDMList();
+    Object.keys(dmPartners).forEach(p => watchConvo(db.ref('dms/' + pairKey(uid, p)), p));
+  });
+
+  db.ref('servers').on('value', snap => {
+    serversCache = snap.val() || {};
+    renderServers();
+    renderChannelPanel(currentServerId());
+    const sid = currentServerId();
+    if (sid) {
+      const s = serversCache[sid];
+      const bannerBar = document.getElementById('serverBannerBar');
+      if (s && s.banner) { document.getElementById('serverBannerImg').src = s.banner; bannerBar.style.display = 'block'; } else bannerBar.style.display = 'none';
+    }
+    Object.keys(serversCache).forEach(id => {
+      watchConvo(db.ref('serverMessages/' + id + '/general'), 'srv:' + id);
+      const chans = (serversCache[id].channels) || {};
+      Object.keys(chans).forEach(cid => watchConvo(db.ref('serverMessages/' + id + '/' + cid), 'srvch:' + id + ':' + cid));
+    });
+  });
+
+  db.ref('vc/main').on('value', snap => { vcRoster = snap.val() || {}; renderVcRoster(); if (currentView === 'vc:main') renderVcTiles(); });
+  watchConvo(db.ref('vcChat/main'), 'vc:main');
+
+  watchConvo(db.ref('messages'), 'main');
+  switchView('main');
+
+  function renderOnline() {
+    const list = document.getElementById('onlineList');
+    list.innerHTML = '';
+    const ids = Object.keys(presenceData);
+    document.getElementById('onlineHdr').textContent = `Online (${ids.length})`;
+    ids.forEach(id => {
+      const p = profilesCache[id] || { name: (presenceData[id] || {}).name || 'Unknown', avatar: DEFAULT_AVATAR };
+      if (searchTerm && !p.name.toLowerCase().includes(searchTerm)) return;
+      const div = document.createElement('div');
+      div.className = 'navitem';
+      const crown = adminsCache[id] ? '👑' : '';
+      const frugo = hasFrugo(id) ? '🍹' : '';
+      const status = (presenceData[id] || {}).status || 'online';
+      const lvl = (statsCache[id] || {}).level || 0;
+      const thinking = p.thinking ? ` <span class="lvl">— ${escapeHtml(p.thinking)}</span>` : '';
+      div.innerHTML = `<span class="left"><span class="statusDot ${status}"></span><img src="${p.avatar || DEFAULT_AVATAR}"><span>${crown}${frugo}${tagPrefixFor(id)}${escapeHtml(displayNameOf(p))}${thinking}</span><span class="lvl">Lv.${lvl}</span></span>`;
+      div.onclick = () => showProfile(id);
+      list.appendChild(div);
+    });
+  }
+  function rerenderNames() {
+    document.querySelectorAll('.msg').forEach(row => {
+      const id = row.dataset.uid, p = profilesCache[id];
+      if (p) { row.querySelector('.name').textContent = (adminsCache[id] ? '👑' : '') + (hasFrugo(id) ? '🍹' : '') + displayNameOf(p); row.querySelector('img.avatar').src = p.avatar || DEFAULT_AVATAR; }
+    });
+  }
+}
+
+function renderDMList() {
+  const list = document.getElementById('dmList');
+  list.innerHTML = '';
+  const sortedIds = Object.keys(dmPartners).sort((a, b) => (lastActivity[b] || 0) - (lastActivity[a] || 0));
+  sortedIds.forEach(id => {
+    const p = profilesCache[id];
+    if (!p) return;
+    const div = document.createElement('div');
+    div.className = 'navitem' + (currentView === id ? ' active' : '');
+    const badge = unreadMap[id] ? `<span class="badge">${unreadMap[id]}</span>` : '';
+    div.innerHTML = `<span class="left"><img src="${p.avatar || DEFAULT_AVATAR}"><span>${escapeHtml(displayNameOf(p))}</span></span>${badge}`;
+    div.onclick = () => switchView(id);
+    list.appendChild(div);
+  });
+}
+function renderServers() {
+  const list = document.getElementById('serverList');
+  list.innerHTML = '';
+  Object.keys(serversCache).forEach(id => {
+    const s = serversCache[id], view = 'srv:' + id;
+    const div = document.createElement('div');
+    div.className = 'navitem' + (currentServerId() === id ? ' active' : '');
+    const badge = unreadMap[view] ? `<span class="badge">${unreadMap[view]}</span>` : '';
+    const icon = s.icon ? `<img src="${s.icon}">` : '🖥️';
+    div.innerHTML = `<span class="left">${icon} ${escapeHtml(s.name)}</span>${badge}`;
+    div.onclick = () => switchView(view);
+    list.appendChild(div);
+  });
+}
+
+function watchConvo(ref, convId) {
+  if (watchedConvos.has(convId)) return;
+  watchedConvos.add(convId);
+  ref.limitToLast(1).once('value').then(snap => {
+    let lastKey = null;
+    snap.forEach(c => { lastKey = c.key; });
+    const q = lastKey ? ref.orderByKey().startAfter(lastKey) : ref;
+    q.on('child_added', s => {
+      const m = s.val();
+      if (!m || m.uid === uid) return;
+      if (!convId.startsWith('srv:') && convId !== 'main') lastActivity[convId] = Date.now();
+      const wasUnread = convId !== 'main' && currentView !== convId;
+      if (wasUnread) { unreadMap[convId] = (unreadMap[convId] || 0) + 1; renderDMList(); renderServers(); updateTitle(); }
+      const st = effectiveStatus();
+      const notifyOk = st === 'online' || st === 'away';
+      if (m.mentions && m.mentions.includes(uid) && notifyOk) {
+        pings.push({ key: s.key, convId, from: displayNameOf(profilesCache[m.uid]), text: m.text });
+        renderPings();
+      }
+      if (wasUnread && notifyOk && document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+        new Notification(displayNameOf(profilesCache[m.uid]) + ' — FruityChat', { body: (m.text || '').slice(0, 100) });
+      }
+    });
+  });
+}
+
+function getConvoRef(view) {
+  view = view || currentView;
+  if (view === 'main') return db.ref('messages');
+  if (view.startsWith('srvch:')) { const p = view.split(':'); return db.ref('serverMessages/' + p[1] + '/' + p[2]); }
+  if (view.startsWith('srv:')) return db.ref('serverMessages/' + view.slice(4) + '/general');
+  if (view.startsWith('vc:')) return db.ref('vcChat/' + view.slice(3));
+  return db.ref('dms/' + pairKey(uid, view));
+}
+function currentServerId() {
+  if (currentView.startsWith('srv:')) return currentView.slice(4);
+  if (currentView.startsWith('srvch:')) return currentView.split(':')[1];
+  return null;
+}
+function ensureServerMembership(sid) {
+  db.ref('servers/' + sid + '/members/' + uid).once('value').then(snap => {
+    if (snap.exists()) return;
+    db.ref('servers/' + sid + '/members/' + uid).set(true);
+    const s = serversCache[sid];
+    if (s && s.autoRole) db.ref('servers/' + sid + '/memberRoles/' + uid + '/' + s.autoRole).set(true);
+  });
+}
+function renderChannelPanel(sid) {
+  const panel = document.getElementById('channelPanel');
+  const s = serversCache[sid];
+  panel.style.display = sid ? 'block' : 'none';
+  document.getElementById('mainCenter').style.borderRight = sid ? '' : '';
+  if (!sid) return;
+  panel.innerHTML = '<div class="chHdr">Channels</div>';
+  const genRow = document.createElement('div');
+  genRow.className = 'navitem' + (currentView === 'srv:' + sid ? ' active' : '');
+  genRow.innerHTML = '<span class="left"># general</span>';
+  genRow.onclick = () => switchView('srv:' + sid);
+  panel.appendChild(genRow);
+  const chans = (s && s.channels) || {};
+  Object.keys(chans).forEach(cid => {
+    const row = document.createElement('div');
+    row.className = 'navitem' + (currentView === 'srvch:' + sid + ':' + cid ? ' active' : '');
+    row.innerHTML = `<span class="left"># ${escapeHtml(chans[cid])}</span>`;
+    row.onclick = () => switchView('srvch:' + sid + ':' + cid);
+    panel.appendChild(row);
+  });
+}
+
+function renderTyping(data) {
+  const names = Object.keys(data || {}).filter(id => id !== uid).map(id => data[id]);
+  const el = document.getElementById('statusLine');
+  if (el.classList.contains('muted')) return;
+  if (names.length === 0) el.textContent = '';
+  else if (names.length === 1) el.textContent = `${names[0]} is typing...`;
+  else if (names.length === 2) el.textContent = `${names[0]} and ${names[1]} are typing...`;
+  else el.textContent = `${names[0]}, ${names[1]}, and ${names.length - 2} others are typing...`;
+}
+
+let currentRemoveHandler = null;
+let activeReactionListeners = [];
+let drafts = JSON.parse(localStorage.getItem('fc_drafts') || '{}');
+
+function switchView(view) {
+  drafts[currentView] = document.getElementById('msgInput').value;
+  localStorage.setItem('fc_drafts', JSON.stringify(drafts));
+  currentView = view;
+  if (currentMsgRef && currentMsgHandler) { currentMsgRef.off('child_added', currentMsgHandler); if (currentRemoveHandler) currentMsgRef.off('child_removed', currentRemoveHandler); }
+  activeReactionListeners.forEach(({ ref, handler }) => ref.off('value', handler));
+  activeReactionListeners = [];
+  document.getElementById('messages').innerHTML = '';
+  oldestLoadedKey = null; capturedOldest = false;
+  document.getElementById('mainChatNav').classList.toggle('active', view === 'main');
+  document.getElementById('mainVcNav').classList.toggle('active', view === 'vc:main');
+  document.getElementById('vcBar').style.display = view === 'vc:main' ? 'flex' : 'none';
+  document.getElementById('vcTiles').style.display = view === 'vc:main' ? 'flex' : 'none';
+  if (view === 'vc:main') { renderVcTiles(); document.querySelectorAll('#vcTiles video').forEach(v => v.play().catch(() => {})); }
+  const sid = currentServerId();
+  renderChannelPanel(sid);
+  const bannerBar = document.getElementById('serverBannerBar');
+  const editBtn = document.getElementById('editServerBtn');
+  if (sid) {
+    ensureServerMembership(sid);
+    const s = serversCache[sid];
+    if (s && s.banner) { document.getElementById('serverBannerImg').src = s.banner; bannerBar.style.display = 'block'; } else bannerBar.style.display = 'none';
+    editBtn.style.display = 'block';
+    editBtn.onclick = () => openServerSettings(sid);
+  } else { bannerBar.style.display = 'none'; editBtn.style.display = 'none'; }
+  if (view === 'main') {
+    document.getElementById('chatHeaderText').textContent = 'Main Chat';
+    currentMsgRef = db.ref('messages').limitToLast(50);
+  } else if (view === 'vc:main') {
+    document.getElementById('chatHeaderText').textContent = 'Main VC — text chat';
+    currentMsgRef = db.ref('vcChat/main').limitToLast(50);
+  } else if (view.startsWith('srvch:')) {
+    const p = view.split(':'); const s = serversCache[p[1]];
+    unreadMap[view] = 0;
+    const cname = (s && s.channels && s.channels[p[2]]) || 'channel';
+    document.getElementById('chatHeaderText').textContent = (s ? s.name : 'Server') + ' — #' + cname;
+    currentMsgRef = db.ref('serverMessages/' + p[1] + '/' + p[2]).limitToLast(50);
+  } else if (view.startsWith('srv:')) {
+    const id = view.slice(4);
+    unreadMap[view] = 0;
+    const s = serversCache[id];
+    document.getElementById('chatHeaderText').textContent = (s ? s.name : 'Server') + ' — #general';
+    currentMsgRef = db.ref('serverMessages/' + id + '/general').limitToLast(50);
+  } else {
+    unreadMap[view] = 0;
+    const p = profilesCache[view];
+    document.getElementById('chatHeaderText').textContent = 'DM: ' + (p ? displayNameOf(p) : 'Unknown');
+    currentMsgRef = db.ref('dms/' + pairKey(uid, view)).limitToLast(50);
+  }
+  currentMsgHandler = snap => addMessage(snap.val(), snap.key);
+  currentRemoveHandler = snap => { const el = document.querySelector(`.msg[data-key="${snap.key}"]`); if (el) el.remove(); };
+  currentMsgRef.on('child_added', currentMsgHandler);
+  currentMsgRef.on('child_removed', currentRemoveHandler);
+  if (currentTypingRef && currentTypingHandler) currentTypingRef.off('value', currentTypingHandler);
+  currentTypingRef = db.ref('typing/' + typingKeyFor(view));
+  currentTypingHandler = snap => renderTyping(snap.val());
+  currentTypingRef.on('value', currentTypingHandler);
+  document.getElementById('msgInput').value = drafts[view] || '';
+  autoGrowInput();
+  renderDMList(); renderServers(); updateTitle();
+}
+
+function openDM(partnerUid) {
+  if (partnerUid === uid) return;
+  db.ref('dmIndex/' + uid + '/' + partnerUid).set(true);
+  db.ref('dmIndex/' + partnerUid + '/' + uid).set(true);
+  switchView(partnerUid);
+}
+
+/* ---------- Discord-lite text formatting ---------- */
+function formatMessage(raw) {
+  let t = escapeHtml(raw);
+  const hm = t.match(/^(#{1,3})\s+(.*)$/);
+  if (hm) { const lvl = hm[1].length; t = `<span class="h${lvl}">${hm[2]}</span>`; }
+  t = t.replace(/(https?:\/\/[^\s<]+)/g, url => `<a href="${url}" target="_blank" rel="noopener">${url}</a>`);
+  t = t.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+  t = t.replace(/(^|[^*])\*(?!\*)(.+?)\*(?!\*)/g, '$1<i>$2</i>');
+  t = t.replace(/~~(.+?)~~/g, '<s>$1</s>');
+  t = t.replace(/`(.+?)`/g, '<code>$1</code>');
+  t = t.replace(/@(\S+)/g, m => `<span class="mention">${m}</span>`);
+  t = t.replace(/\n/g, '<br>');
+  return t;
+}
+function formatTime(ts) {
+  if (!ts) return '';
+  const d = new Date(ts), now = new Date();
+  const diffDays = Math.floor((now - d) / 86400000);
+  const hm = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (diffDays === 0) return hm;
+  if (diffDays === 1) return 'Yesterday ' + hm;
+  return d.toLocaleDateString() + ' ' + hm;
+}
+
+function jumpToMessage(key) {
+  const el = document.querySelector(`.msg[data-key="${key}"]`);
+  if (el) { el.scrollIntoView({ block: 'center' }); el.classList.add('pinged'); setTimeout(() => el.classList.remove('pinged'), 1600); }
+}
+
+const REACT_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥', '😱', '😭'];
+function closeAnyPicker() { document.querySelectorAll('.reactPicker').forEach(p => p.remove()); }
+document.addEventListener('click', e => { if (!e.target.closest('.reactBtn')) closeAnyPicker(); });
+function openReactPicker(btn, reactRef) {
+  closeAnyPicker();
+  const pop = document.createElement('div'); pop.className = 'reactPicker';
+  REACT_EMOJIS.forEach(em => {
+    const span = document.createElement('span'); span.textContent = em;
+    span.onclick = () => { reactRef.child(em).child(uid).set(true); pop.remove(); };
+    pop.appendChild(span);
+  });
+  btn.appendChild(pop);
+}
+function renderReactions(row, reactRef, reactions) {
+  let bar = row.querySelector('.reactBar');
+  if (!bar) { bar = document.createElement('div'); bar.className = 'reactBar'; row.querySelector('.txt').after(bar); }
+  bar.innerHTML = '';
+  Object.keys(reactions).forEach(em => {
+    const users = reactions[em] || {};
+    const count = Object.keys(users).length;
+    if (!count) return;
+    const mine = !!users[uid];
+    const pill = document.createElement('span');
+    pill.className = 'reactPill' + (mine ? ' mine' : '');
+    pill.textContent = em + ' ' + count;
+    pill.onclick = () => { if (mine) reactRef.child(em).child(uid).remove(); else reactRef.child(em).child(uid).set(true); };
+    bar.appendChild(pill);
+  });
+}
+
+function addMessage(m, key, prepend) {
+  if (!m) return;
+  if (!prepend && !capturedOldest) { oldestLoadedKey = key; capturedOldest = true; }
+  if (prepend && (!oldestLoadedKey || key < oldestLoadedKey)) oldestLoadedKey = key;
+  const p = profilesCache[m.uid] || { name: 'Unknown', avatar: DEFAULT_AVATAR };
+  const box = document.getElementById('messages');
+  const row = document.createElement('div');
+  row.className = 'msg' + (m.uid === uid ? ' own' : '');
+  row.dataset.uid = m.uid; row.dataset.key = key;
+  const time = formatTime(m.ts);
+  const crown = adminsCache[m.uid] ? '👑' : '';
+  const frugoIcon = hasFrugo(m.uid) ? '🍹' : '';
+  const lvl = (statsCache[m.uid] || {}).level || 0;
+  let replyHtml = '';
+  if (m.replyTo) replyHtml = `<div class="replyPreview">↩ Replying to <b>${escapeHtml(m.replyTo.name)}</b>: ${escapeHtml((m.replyTo.text || '').slice(0, 50))}</div>`;
+  const canDelete = m.uid === uid || isAdmin();
+  row.innerHTML = `<img class="avatar" src="${p.avatar || DEFAULT_AVATAR}"><div class="msgBody" style="flex:1;"><div class="msgToolbar"><button class="delBtn" title="Delete (Ctrl+Shift+click = no confirm)">🗑</button><button class="reactBtn" title="React">😀+</button><button class="replyBtn" title="Reply">↩</button></div><span class="name">${crown}${frugoIcon}${tagPrefixFor(m.uid)}${escapeHtml(displayNameOf(p))}</span><span class="lvltag">Lv.${lvl}</span><span class="time">${time}</span>${replyHtml}<div class="txt">${formatMessage(m.text)}</div></div>`;
+  row.querySelector('.name').onclick = () => showProfile(m.uid);
+  row.querySelector('.replyBtn').onclick = () => startReply(key, m);
+  if (m.replyTo) { const rk = m.replyTo.key; row.querySelector('.replyPreview').onclick = () => jumpToMessage(rk); }
+  const delBtn = row.querySelector('.delBtn');
+  if (canDelete) {
+    delBtn.onclick = e => {
+      e.stopPropagation();
+      const ref = getConvoRef(currentView).child(key);
+      if (e.ctrlKey && e.shiftKey) ref.remove(); else if (confirm('Delete this message?')) ref.remove();
+    };
+  } else delBtn.remove();
+  const reactRef = getConvoRef(currentView).child(key).child('reactions');
+  row.querySelector('.reactBtn').onclick = e => { e.stopPropagation(); openReactPicker(e.currentTarget, reactRef); };
+  const reactHandler = snap => renderReactions(row, reactRef, snap.val() || {});
+  reactRef.on('value', reactHandler);
+  activeReactionListeners.push({ ref: reactRef, handler: reactHandler });
+  if (m.replyTo) {
+    const targetRef = getConvoRef(currentView).child(m.replyTo.key);
+    const existHandler = snap => {
+      const el = row.querySelector('.replyPreview');
+      if (!el) return;
+      if (!snap.exists()) {
+        el.innerHTML = `↩ Replying to <b>${escapeHtml(m.replyTo.name)}</b>: <i>This message has been deleted.</i>`;
+        el.onclick = null; el.style.cursor = 'default';
+      }
+    };
+    targetRef.on('value', existHandler);
+    activeReactionListeners.push({ ref: targetRef, handler: existHandler });
+  }
+  if (m.attachment) renderAttachment(row.querySelector('.msgBody'), m.attachment);
+  if (prepend) { box.insertBefore(row, box.firstChild); }
+  else { box.appendChild(row); box.scrollTop = box.scrollHeight; }
+}
+
+function loadMoreMessages() {
+  if (loadingMore || !oldestLoadedKey) return;
+  loadingMore = true;
+  const box = document.getElementById('messages');
+  const prevHeight = box.scrollHeight;
+  getConvoRef(currentView).orderByKey().endBefore(oldestLoadedKey).limitToLast(30).once('value').then(snap => {
+    const items = [];
+    snap.forEach(c => items.push({ key: c.key, val: c.val() }));
+    items.forEach(item => addMessage(item.val, item.key, true));
+    box.scrollTop = box.scrollHeight - prevHeight;
+    loadingMore = false;
+    if (!items.length) oldestLoadedKey = null;
+  }).catch(() => { loadingMore = false; });
+}
+document.getElementById('messages').onscroll = function () { if (this.scrollTop < 60) loadMoreMessages(); };
+
+function startReply(key, m) {
+  const p = profilesCache[m.uid] || { name: 'Unknown' };
+  replyContext = { key, uid: m.uid, name: displayNameOf(p), text: (m.text || '').slice(0, 80) };
+  document.getElementById('replyBar').style.display = 'flex';
+  document.getElementById('replyToName').textContent = replyContext.name;
+  document.getElementById('replyToPreview').textContent = replyContext.text;
+  document.getElementById('msgInput').focus();
+}
+document.getElementById('cancelReplyBtn').onclick = () => { replyContext = null; document.getElementById('replyBar').style.display = 'none'; };
+
+/* ---------- Pings dropdown ---------- */
+function renderPings() {
+  updateTitle();
+  const badge = document.getElementById('pingBadge');
+  badge.textContent = pings.length;
+  badge.style.display = pings.length ? 'block' : 'none';
+  const panel = document.getElementById('pingPanel');
+  panel.innerHTML = '';
+  if (!pings.length) { panel.innerHTML = '<div class="empty">No pings yet</div>'; return; }
+  pings.forEach((ping, idx) => {
+    const div = document.createElement('div');
+    div.className = 'pingItem';
+    div.innerHTML = `<b>${escapeHtml(ping.from)}</b>${escapeHtml((ping.text || '').slice(0, 60))}`;
+    div.onclick = e => { e.stopPropagation(); gotoPing(idx); };
+    panel.appendChild(div);
+  });
+}
+function gotoPing(idx) {
+  const p = pings[idx];
+  pings.splice(idx, 1);
+  renderPings();
+  document.getElementById('pingPanel').style.display = 'none';
+  switchView(p.convId);
+  setTimeout(() => jumpToMessage(p.key), 500);
+}
+document.getElementById('pingBtn').onclick = e => { e.stopPropagation(); const panel = document.getElementById('pingPanel'); panel.style.display = panel.style.display === 'block' ? 'none' : 'block'; };
+document.addEventListener('click', () => { document.getElementById('pingPanel').style.display = 'none'; });
+
+/* ---------- Mentions ---------- */
+function extractMentions(text) {
+  const raw = [...text.matchAll(/@(\S+)/g)].map(m => m[1].replace(/[.,!?;:]+$/, ''));
+  const ids = [];
+  raw.forEach(name => {
+    const found = Object.keys(profilesCache).find(id => (profilesCache[id].name || '').toLowerCase() === name.toLowerCase());
+    if (found && found !== uid && !ids.includes(found)) ids.push(found);
+  });
+  return ids;
+}
+
+/* ---------- Admin commands ---------- */
+function findUidByName(name) { return Object.keys(profilesCache).find(id => (profilesCache[id].name || '').toLowerCase() === name.toLowerCase()); }
+function handleCommand(text) {
+  const parts = text.trim().split(/\s+/);
+  const cmd = parts[0].toLowerCase();
+  const argName = parts.slice(1).join(' ');
+  const flash = (msg, bad) => { setStatus(msg, !!bad); setTimeout(() => setStatus('', false), 2500); };
+  if (cmd === '/help') { flash(isAdmin() ? 'Commands: /ban name, /unban name, /admin name, /deadmin name' : 'Commands: /help'); return; }
+  if (!isAdmin()) { flash("You don't have permission to do that.", true); return; }
+  if (['/ban', '/unban', '/admin', '/deadmin'].includes(cmd)) {
+    const targetUid = findUidByName(argName);
+    if (!targetUid) { flash('User not found.', true); return; }
+    if (cmd === '/ban') { db.ref('banned/' + targetUid).set(true); db.ref('presence/' + targetUid).remove(); flash('Banned ' + argName + '.'); }
+    else if (cmd === '/unban') { db.ref('banned/' + targetUid).remove(); flash('Unbanned ' + argName + '.'); }
+    else if (cmd === '/admin') { db.ref('admins/' + targetUid).set(true); flash('Made ' + argName + ' an admin.'); }
+    else if (cmd === '/deadmin') {
+      if (profilesCache[targetUid] && ['Carterplays6', 'MEPHONE4S'].includes(profilesCache[targetUid].name)) flash("Can't remove that admin.", true);
+      else { db.ref('admins/' + targetUid).remove(); flash('Removed admin from ' + argName + '.'); }
+    }
+  } else { flash('Unknown command. Try /help', true); }
+}
+
+/* ---------- Points / leveling ---------- */
+function levelForCount(c) { return c < 2 ? 0 : Math.floor(Math.log2(c)); }
+function frugoReward(lvl) { return Math.min(100, 20 + (lvl - 1) * 2); }
+function registerMessageSent() {
+  const mine = statsCache[uid] || { points: 0, level: 0, msgCount: 0 };
+  const newCount = (mine.msgCount || 0) + 1;
+  const oldLevel = mine.level || 0;
+  const newLevel = levelForCount(newCount);
+  let pts = mine.points || 0;
+  if (newLevel > oldLevel) for (let l = oldLevel + 1; l <= newLevel; l++) pts += frugoReward(l);
+  const updated = { points: pts, level: newLevel, msgCount: newCount };
+  statsCache[uid] = updated;
+  db.ref('stats/' + uid).set(updated);
+}
+
+/* ---------- Emoji picker (default set + text-face emoticons, colon-trigger) ---------- */
+const EMOJI_LIST = [
+  { e: '😀', n: 'grinning' }, { e: '😃', n: 'smiley' }, { e: '😄', n: 'smile' }, { e: '😁', n: 'grin' },
+  { e: '😆', n: 'laughing' }, { e: '😅', n: 'sweat smile' }, { e: '🤣', n: 'rofl' }, { e: '😂', n: 'joy' },
+  { e: '🙂', n: 'slight smile' }, { e: '🙃', n: 'upside down' }, { e: '😉', n: 'wink' }, { e: '😊', n: 'blush' },
+  { e: '😇', n: 'innocent' }, { e: '🥰', n: 'heart eyes smile' }, { e: '😍', n: 'heart eyes' }, { e: '🤩', n: 'star struck' },
+  { e: '😘', n: 'kiss' }, { e: '😗', n: 'kissing' }, { e: '😋', n: 'yum' }, { e: '😛', n: 'tongue' },
+  { e: '😜', n: 'wink tongue' }, { e: '🤪', n: 'zany' }, { e: '😝', n: 'squint tongue' }, { e: '🤑', n: 'money mouth' },
+  { e: '🤗', n: 'hug' }, { e: '🤭', n: 'hand over mouth' }, { e: '🤫', n: 'shush' }, { e: '🤔', n: 'thinking' },
+  { e: '🤐', n: 'zipper mouth' }, { e: '🙄', n: 'eye roll' }, { e: '😬', n: 'grimace' }, { e: '😌', n: 'relieved' },
+  { e: '😔', n: 'pensive' }, { e: '😪', n: 'sleepy' }, { e: '🤤', n: 'drool' }, { e: '😴', n: 'sleep' },
+  { e: '😷', n: 'mask' }, { e: '🤒', n: 'thermometer' }, { e: '🤕', n: 'bandage' }, { e: '🤢', n: 'nauseated' },
+  { e: '🤮', n: 'vomit' }, { e: '🥵', n: 'hot' }, { e: '🥶', n: 'cold' }, { e: '😵', n: 'dizzy' },
+  { e: '🤯', n: 'exploding head' }, { e: '🥳', n: 'party' }, { e: '😎', n: 'sunglasses' }, { e: '🤓', n: 'nerd' },
+  { e: '🧐', n: 'monocle' }, { e: '😕', n: 'confused' }, { e: '😟', n: 'worried' }, { e: '🙁', n: 'frown' },
+  { e: '😮', n: 'open mouth' }, { e: '😯', n: 'hushed' }, { e: '😲', n: 'astonished' }, { e: '😳', n: 'flushed' },
+  { e: '🥺', n: 'pleading' }, { e: '😦', n: 'frown open' }, { e: '😧', n: 'anguished' }, { e: '😨', n: 'fearful' },
+  { e: '😰', n: 'cold sweat' }, { e: '😥', n: 'sad relieved' }, { e: '😢', n: 'cry' }, { e: '😭', n: 'sob' },
+  { e: '😱', n: 'scream' }, { e: '😖', n: 'confounded' }, { e: '😣', n: 'persevere' }, { e: '😞', n: 'disappointed' },
+  { e: '😓', n: 'sweat' }, { e: '😩', n: 'weary' }, { e: '😫', n: 'tired' }, { e: '🥱', n: 'yawn' },
+  { e: '😤', n: 'triumph' }, { e: '😡', n: 'rage' }, { e: '😠', n: 'angry' }, { e: '🤬', n: 'cursing' },
+  { e: '👍', n: 'thumbsup' }, { e: '👎', n: 'thumbsdown' }, { e: '👌', n: 'ok hand' }, { e: '✌️', n: 'peace' },
+  { e: '🤞', n: 'fingers crossed' }, { e: '👋', n: 'wave' }, { e: '🙌', n: 'raised hands' }, { e: '👏', n: 'clap' },
+  { e: '🙏', n: 'pray' }, { e: '💪', n: 'muscle' }, { e: '❤️', n: 'heart' }, { e: '🧡', n: 'orange heart' },
+  { e: '💛', n: 'yellow heart' }, { e: '💚', n: 'green heart' }, { e: '💙', n: 'blue heart' }, { e: '💜', n: 'purple heart' },
+  { e: '🖤', n: 'black heart' }, { e: '🤍', n: 'white heart' }, { e: '💔', n: 'broken heart' }, { e: '🔥', n: 'fire' },
+  { e: '💯', n: '100' }, { e: '✨', n: 'sparkles' }, { e: '🎉', n: 'tada' }, { e: '🎊', n: 'confetti' },
+  { e: '🎁', n: 'gift' }, { e: '🏆', n: 'trophy' }, { e: '⭐', n: 'star' }, { e: '💀', n: 'skull' },
+  { e: '👻', n: 'ghost' }, { e: '🤡', n: 'clown' }, { e: '💩', n: 'poop' }, { e: '🐱', n: 'cat' },
+  { e: '🐶', n: 'dog' }, { e: '🍕', n: 'pizza' }, { e: '🍔', n: 'burger' }, { e: '☕', n: 'coffee' }
+];
+const FACE_EMOTICONS = [
+  { e: ':)', n: 'smile' }, { e: ':(', n: 'frown' }, { e: '>:(', n: 'angry' }, { e: '<:(', n: 'really sad' }
+];
+let emojiPickerOpen = false;
+function hideEmojiPicker() { document.getElementById('emojiPickerPanel').style.display = 'none'; emojiPickerOpen = false; }
+function showEmojiPicker(query) {
+  const q = (query || '').toLowerCase();
+  const faceMatches = FACE_EMOTICONS.filter(f => f.n.includes(q));
+  const matches = EMOJI_LIST.filter(x => x.n.includes(q)).slice(0, 60);
+  const panel = document.getElementById('emojiPickerPanel');
+  panel.innerHTML = '';
+  if (!faceMatches.length && !matches.length) { hideEmojiPicker(); return; }
+  faceMatches.forEach(f => { const s = document.createElement('span'); s.className = 'faceEmoticon'; s.textContent = f.e; s.title = f.n; s.onclick = () => insertEmoji(f.e, query); panel.appendChild(s); });
+  matches.forEach(x => { const s = document.createElement('span'); s.textContent = x.e; s.title = x.n; s.onclick = () => insertEmoji(x.e, query); panel.appendChild(s); });
+  panel.style.display = 'flex';
+  emojiPickerOpen = true;
+}
+function insertEmoji(emoji, query) {
+  const input = document.getElementById('msgInput');
+  const cursor = input.selectionStart;
+  const before = input.value.slice(0, cursor);
+  const after = input.value.slice(cursor);
+  const newBefore = query ? before.replace(new RegExp(':' + query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$'), emoji + ' ') : before + emoji + ' ';
+  input.value = newBefore + after;
+  const pos = newBefore.length;
+  input.focus(); input.selectionStart = input.selectionEnd = pos;
+  hideEmojiPicker(); autoGrowInput();
+  drafts[currentView] = input.value; localStorage.setItem('fc_drafts', JSON.stringify(drafts));
+}
+function checkColonTrigger() {
+  const input = document.getElementById('msgInput');
+  const val = input.value.slice(0, input.selectionStart);
+  const m = val.match(/:([a-zA-Z0-9 ]{0,20})$/);
+  if (m) showEmojiPicker(m[1]); else hideEmojiPicker();
+}
+document.getElementById('emojiBtn').onclick = () => { if (emojiPickerOpen) hideEmojiPicker(); else showEmojiPicker(''); };
+document.addEventListener('click', e => { if (!e.target.closest('#emojiPickerPanel') && !e.target.closest('#emojiBtn')) hideEmojiPicker(); });
+
+/* ---------- Attachments (images, video, audio, files via Storage) ---------- */
+function openImageLightbox(url) {
+  document.getElementById('imgLightboxImg').src = url;
+  document.getElementById('imgLightboxOverlay').style.display = 'flex';
+}
+document.getElementById('imgLightboxOverlay').onclick = () => { document.getElementById('imgLightboxOverlay').style.display = 'none'; document.getElementById('imgLightboxImg').src = ''; };
+function renderAttachment(container, a) {
+  const wrap = document.createElement('div');
+  wrap.className = 'attachWrap';
+  const type = a.type || '';
+  if (type.startsWith('image/')) {
+    const img = document.createElement('img'); img.src = a.url; img.className = 'attachImg';
+    img.onclick = () => openImageLightbox(a.url);
+    wrap.appendChild(img);
+  } else if (type.startsWith('video/')) {
+    const v = document.createElement('video'); v.src = a.url; v.controls = true; v.className = 'attachImg';
+    wrap.appendChild(v);
+  } else if (type.startsWith('audio/')) {
+    const au = document.createElement('audio'); au.src = a.url; au.controls = true;
+    wrap.appendChild(au);
+  } else {
+    const link = document.createElement('a'); link.href = a.url; link.target = '_blank'; link.textContent = '📎 ' + (a.name || 'file');
+    wrap.appendChild(link);
+  }
+  container.appendChild(wrap);
+}
+function attachLimitBytes() { return hasFrugo(uid) ? 700 * 1024 * 1024 : 300 * 1024 * 1024; }
+let pendingAttachment = null;
+document.getElementById('attachBtn').onclick = () => document.getElementById('attachInput').click();
+function setPendingAttachment(file) {
+  if (!file) return;
+  if (file.size > attachLimitBytes()) { alert(`File too large — limit is ${hasFrugo(uid) ? '700MB' : '300MB'}.`); return; }
+  pendingAttachment = file;
+  const bar = document.getElementById('attachPreviewBar');
+  bar.innerHTML = '';
+  if (file.type.startsWith('image/')) { const img = document.createElement('img'); img.src = URL.createObjectURL(file); bar.appendChild(img); }
+  const label = document.createElement('span'); label.textContent = `${file.name} (${Math.round(file.size / 1024)} KB)`;
+  const removeBtn = document.createElement('button'); removeBtn.textContent = '✕ Remove';
+  removeBtn.onclick = () => { pendingAttachment = null; bar.style.display = 'none'; document.getElementById('attachInput').value = ''; };
+  bar.appendChild(label); bar.appendChild(removeBtn);
+  bar.style.display = 'flex';
+}
+document.getElementById('attachInput').onchange = e => { setPendingAttachment(e.target.files[0]); };
+
+/* Drag-and-drop files onto the chat window */
+const dropZone = document.getElementById('chat');
+let dropDepth = 0;
+dropZone.addEventListener('dragenter', e => { e.preventDefault(); dropDepth++; dropZone.classList.add('dragOver'); });
+dropZone.addEventListener('dragover', e => { e.preventDefault(); });
+dropZone.addEventListener('dragleave', e => { e.preventDefault(); dropDepth = Math.max(0, dropDepth - 1); if (dropDepth === 0) dropZone.classList.remove('dragOver'); });
+dropZone.addEventListener('drop', async e => {
+  e.preventDefault();
+  dropDepth = 0;
+  dropZone.classList.remove('dragOver');
+  const items = e.dataTransfer.items;
+  if (items && items.length && items[0].webkitGetAsEntry) {
+    const entry = items[0].webkitGetAsEntry();
+    if (entry && entry.isDirectory) { alert("Folders can't be attached directly — drop the file(s) inside it instead."); return; }
+  }
+  const file = e.dataTransfer.files[0];
+  if (file) setPendingAttachment(file);
+});
+
+/* ---------- GIF picker (GIPHY) ---------- */
+const GIPHY_API_KEY = 'lQQsUCGi3RfHk9M469uK7gVsnzxm9n88';
+let gifTab = 'search';
+document.getElementById('gifBtn').onclick = () => { const p = document.getElementById('gifPickerPanel'); if (p.style.display === 'block') { p.style.display = 'none'; } else { p.style.display = 'block'; renderGifPanel(); } };
+document.getElementById('gifPickerPanel').onclick = e => e.stopPropagation();
+document.addEventListener('click', e => { if (!e.target.closest('#gifPickerPanel') && !e.target.closest('#gifBtn')) document.getElementById('gifPickerPanel').style.display = 'none'; });
+function renderGifPanel() {
+  const panel = document.getElementById('gifPickerPanel');
+  panel.innerHTML = `
+    <input type="text" id="gifSearchInput" placeholder="Search GIFs...">
+    <div class="gifTabs">
+      <button class="frugoTab${gifTab === 'search' ? ' active' : ''}" id="gifTabSearch">Search</button>
+      <button class="frugoTab${gifTab === 'fav' ? ' active' : ''}" id="gifTabFav">⭐ Favorites</button>
+    </div>
+    <div class="gifGrid" id="gifGrid"></div>`;
+  document.getElementById('gifTabSearch').onclick = () => { gifTab = 'search'; renderGifPanel(); };
+  document.getElementById('gifTabFav').onclick = () => { gifTab = 'fav'; renderGifPanel(); loadFavoriteGifs(); };
+  const input = document.getElementById('gifSearchInput');
+  input.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); searchGifs(input.value); } };
+  if (gifTab === 'fav') loadFavoriteGifs();
+}
+async function searchGifs(query) {
+  const grid = document.getElementById('gifGrid');
+  if (!query.trim()) return;
+  if (!GIPHY_API_KEY || GIPHY_API_KEY.startsWith('PASTE_')) { grid.innerHTML = '<div style="padding:8px;color:#777;">Add your GIPHY API key in the code first (search "GIPHY_API_KEY").</div>'; return; }
+  grid.innerHTML = '<div style="padding:8px;color:#777;">Searching...</div>';
+  try {
+    const res = await fetch(`https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_API_KEY}&q=${encodeURIComponent(query)}&limit=15&rating=pg-13`);
+    const data = await res.json();
+    if (!res.ok) { grid.innerHTML = `<div style="padding:8px;color:#c00;">GIPHY error: ${escapeHtml((data.meta && data.meta.msg) || res.status)}</div>`; return; }
+    grid.innerHTML = '';
+    (data.data || []).forEach(g => {
+      const img = document.createElement('img');
+      img.src = g.images.fixed_height_small.url;
+      img.onclick = () => sendGif(g.images.original.url);
+      img.oncontextmenu = e => { e.preventDefault(); toggleFavoriteGif(g.images.original.url, g.images.fixed_height_small.url); };
+      img.title = 'Click to send, right-click to favorite';
+      grid.appendChild(img);
+    });
+    if (!data.data || !data.data.length) grid.innerHTML = '<div style="padding:8px;color:#777;">No results.</div>';
+  } catch (e) { grid.innerHTML = `<div style="padding:8px;color:#c00;">Search failed: ${escapeHtml(e.message)}</div>`; }
+}
+function sendGif(url) {
+  document.getElementById('gifPickerPanel').style.display = 'none';
+  const payload = { uid, text: '', ts: firebase.database.ServerValue.TIMESTAMP, mentions: [], attachment: { url, type: 'image/gif', name: 'gif' } };
+  getConvoRef(currentView).push(payload);
+  registerMessageSent();
+}
+function toggleFavoriteGif(url, preview) {
+  db.ref('favorites/' + uid + '/gifs').orderByValue().once('value').then(() => {});
+  db.ref('favorites/' + uid + '/gifs').once('value').then(snap => {
+    const all = snap.val() || {};
+    const existingKey = Object.keys(all).find(k => all[k].url === url);
+    if (existingKey) db.ref('favorites/' + uid + '/gifs/' + existingKey).remove();
+    else db.ref('favorites/' + uid + '/gifs').push({ url, preview });
+  });
+}
+function loadFavoriteGifs() {
+  const grid = document.getElementById('gifGrid');
+  if (!grid) return;
+  grid.innerHTML = '<div style="padding:8px;color:#777;">Loading...</div>';
+  db.ref('favorites/' + uid + '/gifs').once('value').then(snap => {
+    const all = snap.val() || {};
+    grid.innerHTML = '';
+    const keys = Object.keys(all);
+    if (!keys.length) { grid.innerHTML = '<div style="padding:8px;color:#777;">No favorites yet — right-click a GIF in Search to favorite it.</div>'; return; }
+    keys.forEach(k => {
+      const img = document.createElement('img');
+      img.src = all[k].preview || all[k].url;
+      img.onclick = () => sendGif(all[k].url);
+      img.oncontextmenu = e => { e.preventDefault(); toggleFavoriteGif(all[k].url, all[k].preview); loadFavoriteGifs(); };
+      grid.appendChild(img);
+    });
+  });
+}
+
+/* ---------- Sending + spam control ---------- */
+let nextAllowed = 0, strikeCount = 0, muteUntil = 0, muteTimer = null, muteEscalation = 0, muteResetTimer = null;
+function setStatus(text, muted) { const el = document.getElementById('statusLine'); el.textContent = text; el.classList.toggle('muted', !!muted); }
+function startMuteCountdown(durationMs) {
+  clearInterval(muteTimer);
+  document.getElementById('sendBtn').disabled = true;
+  document.getElementById('msgInput').disabled = true;
+  muteTimer = setInterval(() => {
+    const left = Math.ceil((muteUntil - Date.now()) / 1000);
+    if (left <= 0) { clearInterval(muteTimer); document.getElementById('sendBtn').disabled = false; document.getElementById('msgInput').disabled = false; setStatus('', false); }
+    else setStatus(`Slow down! Muted for ${left}s...`, true);
+  }, 250);
+}
+function autoGrowInput() {
+  const el = document.getElementById('msgInput');
+  el.style.height = 'auto';
+  el.style.height = Math.min(90, el.scrollHeight) + 'px';
+}
+async function trySend() {
+  const input = document.getElementById('msgInput');
+  const text = input.value.trim();
+  if (!text && !pendingAttachment) return;
+  if (text.startsWith('/')) { handleCommand(text); input.value = ''; autoGrowInput(); return; }
+  const limit = hasFrugo(uid) ? 2500 : 1500;
+  if (text.length > limit) { setStatus(`Message too long (max ${limit} characters).`, true); setTimeout(() => setStatus('', false), 2500); return; }
+  const now = Date.now();
+  if (now < muteUntil) return;
+  if (now < nextAllowed) {
+    strikeCount++;
+    if (strikeCount >= 3) {
+      muteEscalation = Math.min(4, muteEscalation + 1);
+      const dur = Math.min(10000, 2000 + muteEscalation * 2000);
+      muteUntil = now + dur; strikeCount = 0;
+      startMuteCountdown(dur);
+      clearTimeout(muteResetTimer);
+      muteResetTimer = setTimeout(() => { muteEscalation = 0; }, 15000);
+    }
+    return;
+  }
+  strikeCount = 0;
+  nextAllowed = now + 500;
+  let attachmentData = null;
+  if (pendingAttachment) {
+    const file = pendingAttachment;
+    document.getElementById('sendBtn').disabled = true;
+    setStatus('Uploading attachment... 0%', false);
+    try {
+      const path = `attachments/${uid}_${Date.now()}_${file.name}`;
+      const url = await uploadBlob(file, path, pct => setStatus(`Uploading attachment... ${pct}%`, false));
+      attachmentData = { url, type: file.type || 'application/octet-stream', name: file.name };
+    } catch (e) {
+      setStatus('Attachment upload failed: ' + e.message, true);
+      document.getElementById('sendBtn').disabled = false;
+      return;
+    }
+    setStatus('', false);
+    document.getElementById('sendBtn').disabled = false;
+    pendingAttachment = null; document.getElementById('attachPreviewBar').style.display = 'none'; document.getElementById('attachInput').value = '';
+  }
+  const mentions = extractMentions(text);
+  if (replyContext && replyContext.uid !== uid && !mentions.includes(replyContext.uid)) mentions.push(replyContext.uid);
+  const payload = { uid, text, ts: firebase.database.ServerValue.TIMESTAMP, mentions };
+  if (replyContext) payload.replyTo = { key: replyContext.key, uid: replyContext.uid, name: replyContext.name, text: replyContext.text };
+  if (attachmentData) payload.attachment = attachmentData;
+  getConvoRef(currentView).push(payload);
+  if (!currentView.startsWith('srv:') && currentView !== 'main') { lastActivity[currentView] = Date.now(); renderDMList(); }
+  input.value = ''; autoGrowInput();
+  delete drafts[currentView]; localStorage.setItem('fc_drafts', JSON.stringify(drafts));
+  replyContext = null; document.getElementById('replyBar').style.display = 'none';
+  registerMessageSent();
+  db.ref('typing/' + typingKeyFor(currentView) + '/' + uid).remove();
+  clearTimeout(typingTimer);
+}
+let typingTimer;
+document.getElementById('msgInput').oninput = () => {
+  autoGrowInput();
+  checkColonTrigger();
+  drafts[currentView] = document.getElementById('msgInput').value;
+  localStorage.setItem('fc_drafts', JSON.stringify(drafts));
+  const tKey = typingKeyFor(currentView);
+  db.ref('typing/' + tKey + '/' + uid).set(profile.name);
+  clearTimeout(typingTimer);
+  typingTimer = setTimeout(() => db.ref('typing/' + tKey + '/' + uid).remove(), 1800);
+};
+document.getElementById('sendBtn').onclick = trySend;
+document.getElementById('msgInput').onkeydown = e => {
+  if (e.key === 'Enter' && e.ctrlKey) {
+    e.preventDefault();
+    const el = e.target, start = el.selectionStart, end = el.selectionEnd;
+    el.value = el.value.slice(0, start) + '\n' + el.value.slice(end);
+    el.selectionStart = el.selectionEnd = start + 1;
+    autoGrowInput();
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    trySend();
+  }
+};
+
+/* ---------- User directory (search / online / offline / all) ---------- */
+let dirFilter = 'online', dirSearchTerm = '';
+function openDirectory() { document.getElementById('dirOverlay').style.display = 'flex'; renderDirectory(); }
+document.getElementById('downloadAppBtn').onclick = () => {
+  const overlay = document.getElementById('downloadRedirect');
+  overlay.style.display = 'flex';
+  setTimeout(() => {
+    const blob = new Blob([document.documentElement.outerHTML], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'FruityChat-App.html';
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    overlay.style.display = 'none';
+  }, 900);
+};
+document.getElementById('closeDir').onclick = () => document.getElementById('dirOverlay').style.display = 'none';
+document.getElementById('dirOverlay').onclick = e => { if (e.target.id === 'dirOverlay') e.currentTarget.style.display = 'none'; };
+document.getElementById('dirSearch').oninput = e => { dirSearchTerm = e.target.value.toLowerCase(); renderDirectory(); };
+function setDirTab(tab) {
+  dirFilter = tab;
+  document.getElementById('dirTabOnline').classList.toggle('active', tab === 'online');
+  document.getElementById('dirTabOffline').classList.toggle('active', tab === 'offline');
+  document.getElementById('dirTabAll').classList.toggle('active', tab === 'all');
+  renderDirectory();
+}
+document.getElementById('dirTabOnline').onclick = () => setDirTab('online');
+document.getElementById('dirTabOffline').onclick = () => setDirTab('offline');
+document.getElementById('dirTabAll').onclick = () => setDirTab('all');
+function renderDirectory() {
+  const list = document.getElementById('dirList');
+  list.innerHTML = '';
+  Object.keys(profilesCache).forEach(id => {
+    const p = profilesCache[id];
+    const isOnline = !!presenceData[id];
+    if (dirFilter === 'online' && !isOnline) return;
+    if (dirFilter === 'offline' && isOnline) return;
+    if (dirSearchTerm && !displayNameOf(p).toLowerCase().includes(dirSearchTerm) && !(p.name || '').toLowerCase().includes(dirSearchTerm)) return;
+    const status = isOnline ? ((presenceData[id] || {}).status || 'online') : 'offline';
+    const div = document.createElement('div');
+    div.className = 'navitem';
+    div.innerHTML = `<span class="left"><span class="statusDot ${status}"></span><img src="${p.avatar || DEFAULT_AVATAR}"><span>${escapeHtml(displayNameOf(p))}</span></span>`;
+    div.onclick = () => { document.getElementById('dirOverlay').style.display = 'none'; showProfile(id); };
+    list.appendChild(div);
+  });
+  if (!list.children.length) list.innerHTML = '<div style="padding:8px;color:#777;">No users found.</div>';
+}
+
+/* ---------- Server settings ---------- */
+document.getElementById('closeSs').onclick = () => document.getElementById('serverSettingsOverlay').style.display = 'none';
+function openServerSettings(sid) {
+  const s = serversCache[sid] || {};
+  const canManage = s.owner === uid || isAdmin();
+  const body = document.getElementById('ssBody');
+  document.getElementById('ssTitle').textContent = s.name || 'Server';
+  const inviteLink = location.href.split('#')[0] + '#join-' + sid;
+  if (!canManage) {
+    body.innerHTML = `<p>Invite link — share this so others can join:</p><input type="text" id="ssInviteBox" readonly style="width:100%;" value="${inviteLink}"><button id="ssCopyBtn" style="margin-top:6px;width:100%;">Copy Link</button>`;
+    document.getElementById('ssCopyBtn').onclick = () => { document.getElementById('ssInviteBox').select(); document.execCommand('copy'); };
+    document.getElementById('serverSettingsOverlay').style.display = 'flex';
+    return;
+  }
+  const chans = s.channels || {}, roles = s.roles || {};
+  body.innerHTML = `
+    <label>Server Icon</label><input type="file" id="ssIconInput" accept="image/*"><br>
+    <label style="margin-top:6px;display:block;">Server Banner</label><input type="file" id="ssBannerInput" accept="image/*">
+    <div class="divider">
+      <label>Create Channel (${Object.keys(chans).length}/50)</label>
+      <input type="text" id="ssChannelInput" maxlength="24" placeholder="channel-name"><button id="ssChannelAdd">Add</button>
+      <div id="ssChannelList" style="margin-top:4px;"></div>
+    </div>
+    <div class="divider">
+      <label>Create Role</label>
+      <input type="text" id="ssRoleInput" maxlength="20" placeholder="role name"><button id="ssRoleAdd">Add</button>
+      <div id="ssRoleList" style="margin-top:4px;"></div>
+    </div>
+    <div class="divider">
+      <label>Auto-Role (assigned when someone joins)</label>
+      <select id="ssAutoRoleSelect" style="width:100%;"><option value="">None</option></select>
+    </div>
+    <div class="divider">
+      <label>Invite Link</label>
+      <input type="text" id="ssInviteBox" readonly style="width:100%;" value="${inviteLink}"><button id="ssCopyBtn" style="margin-top:4px;width:100%;">Copy Link</button>
+    </div>`;
+  document.getElementById('ssIconInput').onchange = async e => {
+    if (!e.target.files[0]) return;
+    try { const url = await uploadDataUrl(await fileToDataUrl(e.target.files[0]), `serverIcons/${sid}_${Date.now()}.png`); db.ref('servers/' + sid + '/icon').set(url); }
+    catch (err) { alert('Icon upload failed — check Storage rules.'); }
+  };
+  document.getElementById('ssBannerInput').onchange = async e => {
+    if (!e.target.files[0]) return;
+    try { const url = await uploadDataUrl(await fileToDataUrl(e.target.files[0]), `serverBanners/${sid}_${Date.now()}.png`); db.ref('servers/' + sid + '/banner').set(url); }
+    catch (err) { alert('Banner upload failed — check Storage rules.'); }
+  };
+  document.getElementById('ssChannelAdd').onclick = () => {
+    const name = document.getElementById('ssChannelInput').value.trim();
+    if (!name) return;
+    if (Object.keys(chans).length >= 50) { alert('Max 50 channels reached.'); return; }
+    db.ref('servers/' + sid + '/channels').push(name);
+  };
+  const chList = document.getElementById('ssChannelList');
+  Object.keys(chans).forEach(cid => {
+    const row = document.createElement('div'); row.textContent = '# ' + chans[cid] + '  ';
+    const del = document.createElement('button'); del.textContent = '✕'; del.onclick = () => db.ref('servers/' + sid + '/channels/' + cid).remove();
+    row.appendChild(del); chList.appendChild(row);
+  });
+  document.getElementById('ssRoleAdd').onclick = () => {
+    const name = document.getElementById('ssRoleInput').value.trim();
+    if (!name) return;
+    db.ref('servers/' + sid + '/roles').push(name);
+  };
+  const roleList = document.getElementById('ssRoleList');
+  const autoSel = document.getElementById('ssAutoRoleSelect');
+  Object.keys(roles).forEach(rid => {
+    const row = document.createElement('div'); row.textContent = roles[rid] + '  ';
+    const del = document.createElement('button'); del.textContent = '✕'; del.onclick = () => db.ref('servers/' + sid + '/roles/' + rid).remove();
+    row.appendChild(del); roleList.appendChild(row);
+    const opt = document.createElement('option'); opt.value = rid; opt.textContent = roles[rid];
+    if (s.autoRole === rid) opt.selected = true;
+    autoSel.appendChild(opt);
+  });
+  autoSel.onchange = () => db.ref('servers/' + sid + '/autoRole').set(autoSel.value || null);
+  document.getElementById('ssCopyBtn').onclick = () => { document.getElementById('ssInviteBox').select(); document.execCommand('copy'); };
+  document.getElementById('serverSettingsOverlay').style.display = 'flex';
+}
+
+/* ---------- Support tickets ---------- */
+const SUPPORT_CATEGORIES = ['Lost account', 'Account hacked', 'Bug report', 'Report a user', 'Billing / Frugo issue', 'Other'];
+document.getElementById('supportBtn').onclick = () => {
+  const list = document.getElementById('supportCategoryList');
+  list.innerHTML = '';
+  SUPPORT_CATEGORIES.forEach(cat => {
+    const btn = document.createElement('button');
+    btn.textContent = cat; btn.style.cssText = 'display:block;width:100%;margin-top:4px;text-align:left;padding:5px;';
+    btn.onclick = () => showSupportForm(cat);
+    list.appendChild(btn);
+  });
+  document.getElementById('supportOverlay').style.display = 'flex';
+};
+document.getElementById('closeSupport').onclick = () => document.getElementById('supportOverlay').style.display = 'none';
+function showSupportForm(cat) {
+  document.getElementById('supportBody').innerHTML = `
+    <p><b>${escapeHtml(cat)}</b></p>
+    <label>Tell us more (optional)</label>
+    <textarea id="supportMsgInput" style="width:100%;height:60px;"></textarea>
+    <button id="supportSendBtn" style="width:100%;margin-top:6px;">Send</button>
+    <button id="supportBackBtn" style="width:100%;margin-top:4px;">Back</button>`;
+  document.getElementById('supportBackBtn').onclick = () => document.getElementById('supportBtn').onclick();
+  document.getElementById('supportSendBtn').onclick = () => {
+    db.ref('supportTickets').push({ uid, name: profile ? profile.name : 'Unknown', category: cat, message: document.getElementById('supportMsgInput').value.trim(), ts: firebase.database.ServerValue.TIMESTAMP, status: 'open' });
+    document.getElementById('supportBody').innerHTML = '<p>Sent — an admin will follow up.</p>';
+    setTimeout(() => document.getElementById('supportOverlay').style.display = 'none', 1200);
+  };
+}
+let ticketsCache = {};
+db.ref('supportTickets').on('value', snap => {
+  ticketsCache = snap.val() || {};
+  const openCount = Object.values(ticketsCache).filter(t => t.status === 'open').length;
+  const admin = isAdmin();
+  document.getElementById('ticketsBtn').style.display = admin ? 'inline-block' : 'none';
+  document.getElementById('ticketsBadge').style.display = (admin && openCount) ? 'block' : 'none';
+  document.getElementById('ticketsBadge').textContent = openCount;
+});
+document.getElementById('ticketsBtn').onclick = () => {
+  const body = document.getElementById('ticketsBody');
+  body.innerHTML = '';
+  const keys = Object.keys(ticketsCache).filter(k => ticketsCache[k].status === 'open').sort((a, b) => (ticketsCache[b].ts || 0) - (ticketsCache[a].ts || 0));
+  if (!keys.length) body.innerHTML = '<p style="color:#777;">No open tickets.</p>';
+  keys.forEach(k => {
+    const t = ticketsCache[k];
+    const div = document.createElement('div');
+    div.style.cssText = 'border-bottom:1px solid var(--face-dark);padding:6px 0;';
+    div.innerHTML = `<b>${escapeHtml(t.category)}</b> — from ${escapeHtml(t.name)}<br><span style="font-size:11px;">${escapeHtml(t.message || '(no message)')}</span><br>`;
+    const viewBtn = document.createElement('button'); viewBtn.textContent = 'View Profile'; viewBtn.style.marginTop = '4px';
+    viewBtn.onclick = () => { document.getElementById('ticketsOverlay').style.display = 'none'; showProfile(t.uid); };
+    const resolveBtn = document.createElement('button'); resolveBtn.textContent = 'Mark Resolved'; resolveBtn.style.cssText = 'margin-top:4px;margin-left:4px;';
+    resolveBtn.onclick = () => db.ref('supportTickets/' + k + '/status').set('resolved');
+    div.appendChild(viewBtn); div.appendChild(resolveBtn);
+    body.appendChild(div);
+  });
+  document.getElementById('ticketsOverlay').style.display = 'flex';
+};
+document.getElementById('closeTickets').onclick = () => document.getElementById('ticketsOverlay').style.display = 'none';
+
+/* ---------- Delete account ---------- */
+document.getElementById('deleteAccountBtn').onclick = () => {
+  if (!confirm('Delete your account? You can appeal this in Support within a week.')) return;
+  db.ref('deletedAccounts/' + uid).set({ name: profile.name, ts: firebase.database.ServerValue.TIMESTAMP });
+  db.ref('presence/' + uid).remove();
+  document.body.innerHTML = `<div class="win" style="width:340px;"><div class="titlebar"><span>Account Deleted</span></div><div style="padding:20px;">
+    <p>You have deleted your account. You can archive it under a week.</p>
+    <p>Once it has been a week the account is gone forever.</p>
+    <p>Or you can appeal in Support to get it back.</p>
+  </div></div>`;
+};
+db.ref('deletedAccounts/' + uid).on('value', snap => {
+  if (snap.exists() && document.getElementById('chat')) {
+    document.body.innerHTML = `<div class="win" style="width:340px;"><div class="titlebar"><span>Account Deleted</span></div><div style="padding:20px;">
+      <p>This account was deleted. You can archive it under a week.</p>
+      <p>Once it has been a week the account is gone forever.</p>
+      <p>Or you can appeal in Support to get it back.</p>
+    </div></div>`;
+  }
+});
+
+/* ---------- Admin: custom tags ---------- */
+document.getElementById('adminGearBtn').onclick = () => {
+  if (!isAdmin()) return;
+  const sel = document.getElementById('tagUserSelect');
+  sel.innerHTML = '';
+  Object.keys(profilesCache).forEach(id => {
+    const opt = document.createElement('option'); opt.value = id; opt.textContent = displayNameOf(profilesCache[id]);
+    sel.appendChild(opt);
+  });
+  sel.onchange = fillTagInputs;
+  fillTagInputs();
+  document.getElementById('adminTagOverlay').style.display = 'flex';
+};
+function fillTagInputs() {
+  const id = document.getElementById('tagUserSelect').value;
+  const t = customTagsCache[id] || {};
+  document.getElementById('tagTextInput').value = t.tag || '';
+  document.getElementById('tagEmojiInput').value = t.emoji || '';
+}
+document.getElementById('closeAdminTag').onclick = () => document.getElementById('adminTagOverlay').style.display = 'none';
+document.getElementById('tagSaveBtn').onclick = () => {
+  const id = document.getElementById('tagUserSelect').value;
+  const tag = document.getElementById('tagTextInput').value.trim();
+  const emoji = document.getElementById('tagEmojiInput').value.trim();
+  if (!tag && !emoji) { db.ref('customTags/' + id).remove(); } else { db.ref('customTags/' + id).set({ tag, emoji }); }
+  document.getElementById('adminTagOverlay').style.display = 'none';
+};
+document.getElementById('tagClearBtn').onclick = () => {
+  const id = document.getElementById('tagUserSelect').value;
+  db.ref('customTags/' + id).remove();
+  document.getElementById('tagTextInput').value = ''; document.getElementById('tagEmojiInput').value = '';
+};
+
+/* ---------- Frugo shop ---------- */
+document.getElementById('frugoBtn').onclick = () => { document.getElementById('frugoOverlay').style.display = 'flex'; switchFrugoTab('buy'); };
+document.getElementById('closeFrugo').onclick = () => document.getElementById('frugoOverlay').style.display = 'none';
+document.getElementById('tabBuyBtn').onclick = () => switchFrugoTab('buy');
+document.getElementById('tabGamesBtn').onclick = () => switchFrugoTab('games');
+function switchFrugoTab(tab) {
+  document.getElementById('buyTab').style.display = tab === 'buy' ? 'block' : 'none';
+  document.getElementById('gamesTab').style.display = tab === 'games' ? 'block' : 'none';
+  document.getElementById('tabBuyBtn').classList.toggle('active', tab === 'buy');
+  document.getElementById('tabGamesBtn').classList.toggle('active', tab === 'games');
+  if (tab === 'buy') renderBuyTab(); else renderGamesTab();
+}
+function renderBuyTab() {
+  const mine = statsCache[uid] || { points: 0 };
+  document.getElementById('balanceText').textContent = mine.points || 0;
+  document.getElementById('buy1Btn').disabled = (mine.points || 0) < 50;
+  document.getElementById('buy3Btn').disabled = (mine.points || 0) < 150;
+}
+function buyFrugo(days, cost) {
+  const mine = statsCache[uid] || { points: 0, level: 0, msgCount: 0 };
+  if ((mine.points || 0) < cost) return;
+  const updated = { ...mine, points: mine.points - cost };
+  statsCache[uid] = updated;
+  db.ref('stats/' + uid).set(updated);
+  const existingExpiry = (frugoCache[uid] && frugoCache[uid].expires > Date.now()) ? frugoCache[uid].expires : Date.now();
+  db.ref('frugoStatus/' + uid).set({ expires: existingExpiry + days * 86400000 });
+  renderBuyTab();
+}
+document.getElementById('buy1Btn').onclick = () => buyFrugo(1, 50);
+document.getElementById('buy3Btn').onclick = () => buyFrugo(3, 150);
+
+const GAMES = [
+  { id: 'math', name: 'Quick Math', diff: 'Easy', reward: 6 },
+  { id: 'reaction', name: 'Reaction Test', diff: 'Medium', reward: 12 },
+  { id: 'color', name: 'Color Match', diff: 'Medium', reward: 10 },
+  { id: 'memory', name: 'Number Memory', diff: 'Hard', reward: 20 },
+  { id: 'simon', name: 'Simon Says', diff: 'Hard', reward: 25 }
+];
+function gameCooldownLeft(id) { const t = parseInt(localStorage.getItem('fc_game_cd_' + id) || '0'); return Math.max(0, t - Date.now()); }
+function renderGamesTab() {
+  const list = document.getElementById('gamesList');
+  list.innerHTML = '';
+  GAMES.forEach(g => {
+    const left = gameCooldownLeft(g.id);
+    const div = document.createElement('div'); div.className = 'gameRow';
+    div.innerHTML = `<div><b>${g.name}</b><br><small>${g.diff} · up to ${g.reward}🍹</small></div>`;
+    const btn = document.createElement('button');
+    if (left > 0) { btn.disabled = true; btn.textContent = `Wait ${Math.ceil(left / 1000)}s`; }
+    else { btn.textContent = 'Play'; btn.onclick = () => playGame(g); }
+    div.appendChild(btn);
+    list.appendChild(div);
+  });
+}
+setInterval(() => { if (document.getElementById('frugoOverlay').style.display === 'flex' && document.getElementById('gamesTab').style.display !== 'none') renderGamesTab(); }, 1000);
+
+function finishGame(game, reward) {
+  localStorage.setItem('fc_game_cd_' + game.id, Date.now() + 20000);
+  if (reward > 0) {
+    const mine = statsCache[uid] || { points: 0, level: 0, msgCount: 0 };
+    const updated = { ...mine, points: (mine.points || 0) + reward };
+    statsCache[uid] = updated;
+    db.ref('stats/' + uid).set(updated);
+  }
+  document.getElementById('gamePlayArea').innerHTML = reward > 0 ? `<p>You earned ${reward} 🍹!</p>` : `<p>No reward this time — try again after the cooldown.</p>`;
+  renderGamesTab();
+}
+function playGame(g) {
+  const area = document.getElementById('gamePlayArea');
+  if (g.id === 'math') {
+    const a = Math.floor(Math.random() * 20) + 1, b = Math.floor(Math.random() * 20) + 1;
+    area.innerHTML = `<p>${a} + ${b} = ?</p><input type="number" id="mathAns"><button id="mathSubmit">Submit</button>`;
+    document.getElementById('mathSubmit').onclick = () => { const val = parseInt(document.getElementById('mathAns').value); finishGame(g, val === (a + b) ? g.reward : 0); };
+  } else if (g.id === 'reaction') {
+    area.innerHTML = `<div id="reactBox" style="background:#c00;color:#fff;padding:20px;text-align:center;cursor:pointer;">Wait for green...</div>`;
+    const box = document.getElementById('reactBox');
+    let ready = false, startT = 0;
+    setTimeout(() => { box.style.background = '#0c0'; box.textContent = 'Click now!'; ready = true; startT = Date.now(); }, 1000 + Math.random() * 2000);
+    box.onclick = () => {
+      if (!ready) { finishGame(g, 0); return; }
+      const rt = Date.now() - startT;
+      const reward = rt < 300 ? g.reward : rt < 600 ? Math.round(g.reward * 0.6) : Math.round(g.reward * 0.3);
+      finishGame(g, reward);
+    };
+  } else if (g.id === 'memory') {
+    const seq = Array.from({ length: 4 }, () => Math.floor(Math.random() * 10));
+    area.innerHTML = `<p style="font-size:20px;letter-spacing:6px;">${seq.join(' ')}</p><p>Memorize it!</p>`;
+    setTimeout(() => {
+      area.innerHTML = `<p>What was the sequence?</p><input type="text" id="memAns" placeholder="e.g. 1 2 3 4"><button id="memSubmit">Submit</button>`;
+      document.getElementById('memSubmit').onclick = () => { const val = document.getElementById('memAns').value.trim().replace(/[^0-9]/g, ''); finishGame(g, val === seq.join('') ? g.reward : 0); };
+    }, 2000);
+  } else if (g.id === 'color') {
+    const colors = [{ n: 'Red', c: '#e33' }, { n: 'Blue', c: '#36e' }, { n: 'Green', c: '#2a6' }, { n: 'Yellow', c: '#dd3' }];
+    const word = colors[Math.floor(Math.random() * colors.length)];
+    const displayColor = colors[Math.floor(Math.random() * colors.length)];
+    area.innerHTML = `<p>Click the button matching this <b>COLOR</b> (not the word):</p><p style="font-size:24px;font-weight:bold;color:${displayColor.c};">${word.n}</p><div id="colorBtns"></div>`;
+    const btnBox = document.getElementById('colorBtns');
+    [...colors].sort(() => Math.random() - 0.5).forEach(c => {
+      const b = document.createElement('button'); b.textContent = c.n; b.style.margin = '3px';
+      b.onclick = () => finishGame(g, c.n === displayColor.n ? g.reward : 0);
+      btnBox.appendChild(b);
+    });
+  } else if (g.id === 'simon') {
+    const seq = Array.from({ length: 5 }, () => Math.floor(Math.random() * 4));
+    const colors = ['#e33', '#36e', '#2a6', '#dd3'];
+    area.innerHTML = `<p id="simonMsg">Watch the sequence...</p><div id="simonBtns"></div>`;
+    const box = document.getElementById('simonBtns');
+    const btns = colors.map(c => { const b = document.createElement('button'); b.style.cssText = `background:${c};width:36px;height:36px;margin:3px;`; box.appendChild(b); return b; });
+    let i = 0;
+    function flash() {
+      if (i >= seq.length) { startInput(); return; }
+      btns[seq[i]].style.outline = '3px solid #000';
+      setTimeout(() => { btns[seq[i]].style.outline = ''; i++; setTimeout(flash, 200); }, 500);
+    }
+    setTimeout(flash, 500);
+    function startInput() {
+      const userSeq = [];
+      document.getElementById('simonMsg').textContent = 'Your turn! Repeat the sequence:';
+      btns.forEach((b, idx) => {
+        b.onclick = () => {
+          userSeq.push(idx);
+          const correctSoFar = userSeq.every((v, k) => v === seq[k]);
+          if (!correctSoFar) { finishGame(g, Math.round(g.reward * (userSeq.length - 1) / seq.length)); btns.forEach(bb => bb.onclick = null); return; }
+          if (userSeq.length === seq.length) { finishGame(g, g.reward); btns.forEach(bb => bb.onclick = null); }
+        };
+      });
+    }
+  }
+}
+
+/* ---------- Voice Chat (WebRTC mesh via Realtime Database signaling) ---------- */
+let vcRoster = {}, vcJoined = false, vcPeers = {}, localStream = null, screenStream = null, vcHeartbeat = null;
+const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+function renderVcRoster() {
+  const badge = document.getElementById('vcCountBadge');
+  const ids = Object.keys(vcRoster);
+  badge.style.display = ids.length ? 'inline-block' : 'none';
+  badge.textContent = ids.length;
+  const list = document.getElementById('vcRoster');
+  list.innerHTML = '';
+  ids.forEach(id => {
+    const p = profilesCache[id] || { name: (vcRoster[id] || {}).name || 'Unknown' };
+    const div = document.createElement('div');
+    div.className = 'navitem';
+    div.innerHTML = `<span class="left">🔈 ${escapeHtml(displayNameOf(p))}</span>`;
+    div.onclick = () => joinVC();
+    list.appendChild(div);
+  });
+}
+function renderVcTiles() {
+  const box = document.getElementById('vcTiles');
+  const currentIds = Object.keys(vcRoster);
+  Array.from(box.children).forEach(tile => { const id = tile.id.slice(7); if (!currentIds.includes(id)) tile.remove(); });
+  currentIds.forEach(id => {
+    const p = profilesCache[id] || { name: (vcRoster[id] || {}).name || 'Unknown', avatar: DEFAULT_AVATAR };
+    const micOn = (vcRoster[id] || {}).micOn !== false;
+    let tile = document.getElementById('vcTile_' + id);
+    if (!tile) {
+      tile = document.createElement('div');
+      tile.className = 'vcTile';
+      tile.id = 'vcTile_' + id;
+      tile.innerHTML = `<img class="tileAvatar" src="${p.avatar || DEFAULT_AVATAR}"><div class="tileName"></div><div class="tileMic"></div>`;
+      box.appendChild(tile);
+    }
+    tile.querySelector('.tileName').textContent = displayNameOf(p);
+    const micDiv = tile.querySelector('.tileMic');
+    micDiv.textContent = micOn ? '🎤' : '🔇';
+    micDiv.className = 'tileMic' + (micOn ? '' : ' muted');
+  });
+}
+function vcSignalRef(to, from) { return db.ref('vcSignal/main/' + to + '/' + from); }
+function addLocalTracksTo(pc) {
+  const existingIds = pc.getSenders().map(s => s.track && s.track.id).filter(Boolean);
+  [localStream, screenStream].forEach(stream => {
+    if (!stream) return;
+    stream.getTracks().forEach(t => { if (!existingIds.includes(t.id)) { try { pc.addTrack(t, stream); } catch (e) {} } });
+  });
+}
+let vcAudioEls = {};
+function attachRemoteStream(otherUid, stream) {
+  const tile = document.getElementById('vcTile_' + otherUid);
+  if (!tile) return;
+  if (stream.getVideoTracks().length > 0) {
+    let vid = tile.querySelector('video');
+    if (!vid) {
+      vid = document.createElement('video');
+      vid.autoplay = true; vid.playsInline = true; vid.muted = (otherUid === uid);
+      vid.style.cursor = 'pointer';
+      vid.onclick = () => openVcFullscreen(vid.srcObject, otherUid);
+      tile.insertBefore(vid, tile.firstChild);
+    }
+    vid.srcObject = stream;
+    vid.play().catch(() => {});
+    const avatarImg = tile.querySelector('.tileAvatar');
+    if (avatarImg) avatarImg.style.display = 'none';
+    const cleanup = () => { if (stream.getVideoTracks().length === 0) { vid.remove(); if (avatarImg) avatarImg.style.display = ''; } };
+    stream.getVideoTracks().forEach(t => { t.onended = cleanup; });
+    stream.onremovetrack = cleanup;
+  } else {
+    let audio = vcAudioEls[otherUid];
+    if (!audio) { audio = new Audio(); audio.autoplay = true; vcAudioEls[otherUid] = audio; }
+    audio.srcObject = stream;
+  }
+}
+let currentFsStreamerId = null, fsWatchersRef = null, fsWatchersHandler = null;
+let vcFsAudioCtx = null, vcFsGainNode = null, vcFsSourceSetup = false, vcFsMuted = false, vcFsLastVolume = 100;
+function ensureVolumeBoost() {
+  if (vcFsSourceSetup) return;
+  const videoEl = document.getElementById('vcFullscreenVideo');
+  try {
+    vcFsAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const source = vcFsAudioCtx.createMediaElementSource(videoEl);
+    vcFsGainNode = vcFsAudioCtx.createGain();
+    source.connect(vcFsGainNode);
+    vcFsGainNode.connect(vcFsAudioCtx.destination);
+    vcFsSourceSetup = true;
+  } catch (e) { /* already set up or unsupported */ }
+}
+function openVcFullscreen(stream, streamerUid) {
+  if (!stream) return;
+  currentFsStreamerId = streamerUid || null;
+  const vid = document.getElementById('vcFullscreenVideo');
+  vid.srcObject = stream;
+  vid.volume = 1; vid.muted = false;
+  ensureVolumeBoost();
+  if (vcFsGainNode) vcFsGainNode.gain.value = document.getElementById('vcFsVolume').value / 100;
+  document.getElementById('vcFullscreenOverlay').style.display = 'flex';
+  if (currentFsStreamerId) {
+    db.ref('vcWatchers/main/' + currentFsStreamerId + '/' + uid).set(true);
+    db.ref('vcWatchers/main/' + currentFsStreamerId + '/' + uid).onDisconnect().remove();
+  }
+  if (fsWatchersRef && fsWatchersHandler) fsWatchersRef.off('value', fsWatchersHandler);
+  if (currentFsStreamerId) {
+    fsWatchersRef = db.ref('vcWatchers/main/' + currentFsStreamerId);
+    fsWatchersHandler = snap => {
+      const ids = Object.keys(snap.val() || {});
+      const names = ids.map(id => displayNameOf(profilesCache[id] || {}));
+      document.getElementById('vcFsWatchers').textContent = 'Watching: ' + (names.length ? names.join(', ') : 'just you');
+    };
+    fsWatchersRef.on('value', fsWatchersHandler);
+  }
+}
+function closeVcFullscreen() {
+  document.getElementById('vcFullscreenOverlay').style.display = 'none';
+  document.getElementById('vcFullscreenVideo').srcObject = null;
+  if (currentFsStreamerId) db.ref('vcWatchers/main/' + currentFsStreamerId + '/' + uid).remove();
+  if (fsWatchersRef && fsWatchersHandler) fsWatchersRef.off('value', fsWatchersHandler);
+  currentFsStreamerId = null;
+}
+document.getElementById('vcFsCloseBtn').onclick = closeVcFullscreen;
+document.getElementById('vcFsVolume').oninput = e => {
+  const v = e.target.value;
+  document.getElementById('vcFsVolumeLabel').textContent = v + '%';
+  if (vcFsGainNode) vcFsGainNode.gain.value = v / 100;
+  vcFsMuted = v == 0;
+  document.getElementById('vcFsMuteBtn').textContent = vcFsMuted ? '🔇' : '🔊';
+};
+document.getElementById('vcFsMuteBtn').onclick = () => {
+  const slider = document.getElementById('vcFsVolume');
+  if (vcFsMuted) { slider.value = vcFsLastVolume; vcFsMuted = false; document.getElementById('vcFsMuteBtn').textContent = '🔊'; }
+  else { vcFsLastVolume = slider.value; slider.value = 0; vcFsMuted = true; document.getElementById('vcFsMuteBtn').textContent = '🔇'; }
+  document.getElementById('vcFsVolumeLabel').textContent = slider.value + '%';
+  if (vcFsGainNode) vcFsGainNode.gain.value = slider.value / 100;
+};
+db.ref('vcChat/main').limitToLast(30).on('child_added', snap => {
+  const m = snap.val();
+  const box = document.getElementById('vcFsMessages');
+  if (!box || !m) return;
+  const p = profilesCache[m.uid] || { name: 'Unknown' };
+  const div = document.createElement('div');
+  div.innerHTML = `<b>${escapeHtml(displayNameOf(p))}:</b> ${escapeHtml(m.text)}`;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+});
+document.getElementById('vcFsSendBtn').onclick = () => {
+  const input = document.getElementById('vcFsChatInput');
+  const text = input.value.trim();
+  if (!text) return;
+  db.ref('vcChat/main').push({ uid, text, ts: firebase.database.ServerValue.TIMESTAMP, mentions: [] });
+  input.value = '';
+};
+document.getElementById('vcFsChatInput').onkeydown = e => { if (e.key === 'Enter') document.getElementById('vcFsSendBtn').onclick(); };
+function createPeer(otherUid) {
+  const pc = new RTCPeerConnection(rtcConfig);
+  vcPeers[otherUid] = pc;
+  pc.onicecandidate = e => { if (e.candidate) db.ref('vcCandidates/main/' + otherUid + '~' + uid).push(e.candidate.toJSON()); };
+  pc.ontrack = e => attachRemoteStream(otherUid, e.streams[0]);
+  pc.onnegotiationneeded = async () => {
+    try { const offer = await pc.createOffer(); await pc.setLocalDescription(offer); vcSignalRef(otherUid, uid).set({ type: 'offer', sdp: offer }); } catch (e) {}
+  };
+  db.ref('vcCandidates/main/' + uid + '~' + otherUid).on('child_added', snap => { pc.addIceCandidate(new RTCIceCandidate(snap.val())).catch(() => {}); snap.ref.remove(); });
+  return pc;
+}
+async function joinVC() {
+  if (vcJoined) { switchView('vc:main'); return; }
+  vcJoined = true;
+  try { localStream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch (e) { alert('Could not access your microphone — joining muted. (' + e.message + ')'); localStream = null; }
+  db.ref('vc/main/' + uid).set({ name: profile.name, micOn: true, ts: firebase.database.ServerValue.TIMESTAMP });
+  db.ref('vc/main/' + uid).onDisconnect().remove();
+  db.ref('vcSignal/main/' + uid).on('child_added', async snap => {
+    const fromUid = snap.key, msg = snap.val();
+    if (!msg) return;
+    let pc = vcPeers[fromUid];
+    if (msg.type === 'offer') {
+      if (!pc) pc = createPeer(fromUid);
+      await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+      addLocalTracksTo(pc);
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      vcSignalRef(fromUid, uid).set({ type: 'answer', sdp: answer });
+    } else if (msg.type === 'answer' && pc) {
+      await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+    }
+    snap.ref.remove();
+  });
+  db.ref('vc/main').on('value', snap => {
+    const list = snap.val() || {};
+    if (!vcJoined) return;
+    Object.keys(list).forEach(otherUid => {
+      if (otherUid === uid || vcPeers[otherUid]) return;
+      if (uid < otherUid) { const pc = createPeer(otherUid); addLocalTracksTo(pc); }
+    });
+    Object.keys(vcPeers).forEach(otherUid => {
+      if (!list[otherUid]) { vcPeers[otherUid].close(); delete vcPeers[otherUid]; const t = document.getElementById('vcTile_' + otherUid); if (t) t.querySelector('video')?.remove(); }
+    });
+  });
+  switchView('vc:main');
+  clearInterval(vcHeartbeat);
+  vcHeartbeat = setInterval(() => {
+    if (!vcJoined) return;
+    const ref = db.ref('vc/main/' + uid);
+    ref.update({ ts: firebase.database.ServerValue.TIMESTAMP }).catch(() => {});
+    ref.onDisconnect().remove();
+  }, 15000);
+}
+function leaveVC() {
+  vcJoined = false;
+  clearInterval(vcHeartbeat);
+  db.ref('vc/main/' + uid).remove();
+  db.ref('vcSignal/main/' + uid).off();
+  Object.values(vcPeers).forEach(pc => pc.close());
+  vcPeers = {};
+  if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+  if (screenStream) { screenStream.getTracks().forEach(t => t.stop()); screenStream = null; }
+  switchView('main');
+}
+function toggleMic() {
+  if (!localStream) { alert('No microphone connected.'); return; }
+  const track = localStream.getAudioTracks()[0];
+  if (!track) return;
+  track.enabled = !track.enabled;
+  db.ref('vc/main/' + uid + '/micOn').set(track.enabled);
+  document.getElementById('vcMicBtn').textContent = track.enabled ? '🎤 Mute' : '🔇 Unmute';
+}
+async function toggleScreenShare() {
+  if (screenStream) {
+    screenStream.getTracks().forEach(t => t.stop());
+    screenStream = null;
+    Object.values(vcPeers).forEach(pc => { const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video'); if (sender) pc.removeTrack(sender); });
+    const ownTile = document.getElementById('vcTile_' + uid);
+    if (ownTile) { ownTile.querySelector('video')?.remove(); const av = ownTile.querySelector('.tileAvatar'); if (av) av.style.display = ''; }
+    document.getElementById('vcScreenBtn').textContent = '🖥️ Share Screen';
+    return;
+  }
+  try {
+    screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+    Object.values(vcPeers).forEach(pc => screenStream.getTracks().forEach(t => pc.addTrack(t, screenStream)));
+    if (!document.getElementById('vcTile_' + uid)) renderVcTiles();
+    attachRemoteStream(uid, screenStream);
+    document.getElementById('vcScreenBtn').textContent = '🛑 Stop Sharing';
+    screenStream.getVideoTracks()[0].onended = () => { if (screenStream) toggleScreenShare(); };
+  } catch (e) { /* user cancelled the share picker */ }
+}
+
+/* ---------- Profile view modal ---------- */
+let viewedProfileId = null;
+function showProfile(id) {
+  const p = profilesCache[id];
+  if (!p) return;
+  viewedProfileId = id;
+  document.getElementById('pBanner').src = p.banner || DEFAULT_BANNER;
+  document.getElementById('pAvatar').src = p.avatar || DEFAULT_AVATAR;
+  document.getElementById('pName').textContent = (adminsCache[id] ? '👑 ' : '') + (hasFrugo(id) ? '🍹 ' : '') + displayNameOf(p);
+  document.getElementById('pUsername').textContent = p.display ? '@' + p.name : '';
+  document.getElementById('pUsername').style.display = p.display ? 'block' : 'none';
+  document.getElementById('pBio').textContent = p.bio || '(no bio)';
+  document.getElementById('dmFromProfileBtn').style.display = id === uid ? 'none' : 'block';
+  const adminRow = document.getElementById('adminBtnRow');
+  if (isAdmin() && id !== uid) {
+    adminRow.style.display = 'block';
+    const banned = !!bannedCache[id];
+    const banBtn = document.getElementById('banToggleBtn');
+    banBtn.textContent = banned ? 'Unban User' : 'Ban User';
+    banBtn.onclick = () => { if (banned) db.ref('banned/' + id).remove(); else { db.ref('banned/' + id).set(true); db.ref('presence/' + id).remove(); } document.getElementById('overlay').style.display = 'none'; };
+    const adminBtn = document.getElementById('makeAdminBtn');
+    adminBtn.style.display = adminsCache[id] ? 'none' : 'block';
+    adminBtn.onclick = () => { db.ref('admins/' + id).set(true); document.getElementById('overlay').style.display = 'none'; };
+  } else adminRow.style.display = 'none';
+  document.getElementById('overlay').style.display = 'flex';
+}
+document.getElementById('dmFromProfileBtn').onclick = () => { document.getElementById('overlay').style.display = 'none'; if (viewedProfileId) openDM(viewedProfileId); };
+document.getElementById('closeProfile').onclick = () => document.getElementById('overlay').style.display = 'none';
+document.getElementById('overlay').onclick = e => { if (e.target.id === 'overlay') e.currentTarget.style.display = 'none'; };
+
+document.addEventListener('keydown', e => {
+  if (e.key === '/' && document.getElementById('chat').style.display !== 'none' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+    e.preventDefault();
+    document.getElementById('msgInput').focus();
+  }
+});
+if (profile) {
+  document.getElementById('setupWrap').style.display = 'none';
+  enterChat();
+  const hashMatch = location.hash.match(/^#join-(.+)$/);
+  if (hashMatch) setTimeout(() => switchView('srv:' + hashMatch[1]), 800);
+}
+else { openForm('setup'); }
+</script>
+</body>
+</html>
